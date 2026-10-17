@@ -269,23 +269,27 @@ export function createView(container, hud, controls, mode = "projectile") {
     mask = mask?.includes("1") ? mask : starterMask(index, mode);
     const occupied = [];
     for (let i = 0; i < mask.length; i++) if (mask[i] === "1") occupied.push(i);
-    const left = Math.max(0, Math.min(...occupied.map((i) => i % 128)) - 2);
-    const right = Math.min(127, Math.max(...occupied.map((i) => i % 128)) + 2);
-    const top = Math.max(0, Math.min(...occupied.map((i) => Math.floor(i / 128))) - 2);
-    const bottom = Math.min(79, Math.max(...occupied.map((i) => Math.floor(i / 128))) + 2);
+    const left = Math.max(0, Math.min(...occupied.map((i) => i % 128)) - 4);
+    const right = Math.min(127, Math.max(...occupied.map((i) => i % 128)) + 4);
+    const top = Math.max(0, Math.min(...occupied.map((i) => Math.floor(i / 128))) - 4);
+    const bottom = Math.min(79, Math.max(...occupied.map((i) => Math.floor(i / 128))) + 4);
     const width = right - left + 1, height = bottom - top + 1;
     const canvas = document.createElement("canvas");
     canvas.width = width; canvas.height = height;
     const context = canvas.getContext("2d");
     const pixels = context.createImageData(width, height);
+    function hasInk(x, y, radius) {
+      for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+        const px = x + left + dx, py = y + top + dy;
+        if (px >= 0 && px < 128 && py >= 0 && py < 80 && mask[py * 128 + px] === "1") return true;
+      }
+      return false;
+    }
+    const color = index < (mode === "bump" ? 1 : 3) ? [45, 131, 218] : [217, 79, 105];
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-      const visible = [-2, -1, 0, 1, 2].some((dy) =>
-        [-2, -1, 0, 1, 2].some((dx) =>
-          x + left + dx >= 0 && x + left + dx < 128 &&
-          y + top + dy >= 0 && y + top + dy < 80 &&
-          mask[(y + top + dy) * 128 + x + left + dx] === "1"));
-      const color = index < (mode === "bump" ? 1 : 3) ? [45, 131, 218] : [217, 79, 105];
-      pixels.data.set([...color, visible ? 255 : 0], (y * width + x) * 4);
+      const filled = hasInk(x, y, 2);
+      const outlined = filled || hasInk(x, y, 4);
+      pixels.data.set([...(filled ? color : [18, 25, 35]), outlined ? 255 : 0], (y * width + x) * 4);
     }
     context.putImageData(pixels, 0, 0);
     const texture = new THREE.CanvasTexture(canvas);
