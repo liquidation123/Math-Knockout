@@ -46,7 +46,10 @@ const connectionHelp = "Cannot reach the Bump Duel server. Stop the old server a
 socket.addEventListener("open", async () => {
   try {
     const mask = await readSavedMask();
-    if (mask && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "shape", mask }));
+    if (mask && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "shape", mask }));
+      $("#character-note").firstChild.textContent = "Your drawing is in the duel · ";
+    }
   } catch { $("#error").textContent = "Saved drawing could not load; using a cube."; }
 });
 
