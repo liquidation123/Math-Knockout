@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { ARENA, PLAYER_SIZE, OBSTACLES } from "./physics.js";
+import { ARENA, PLAYER_SIZE } from "./physics.js";
 import { PROJECTILE_RADIUS } from "./projectile.js";
 import { buildCartesianGrid, coordinateText } from "./grid.js";
 import { effectKind, pathLookAhead } from "./cinematic.js";
+import { createSummit } from "./summit.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -28,13 +29,24 @@ export function frameCamera(camera, aspect, topInset = 0, bottomInset = 0) {
 
 export function createView(container, hud, controls) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x152032);
+  scene.background = new THREE.Color(0x72c5f5);
+  scene.fog = new THREE.Fog(0x72c5f5, 48, 100);
 
   const birdCamera = createCamera();
+  const summitCamera = new THREE.PerspectiveCamera(52, 1, 0.1, 120);
+  summitCamera.up.set(0, 0, 1);
+  const characterCamera = new THREE.PerspectiveCamera(72, 1, 0.05, 120);
+  characterCamera.up.set(0, 0, 1);
+  let viewMode = "summit";
+  let lookYaw = 0;
+  let lookPitch = 0;
+  let lookAtIndex = -1;
+  const overviewCamera = () => viewMode === "map" ? birdCamera :
+    viewMode === "character" ? characterCamera : summitCamera;
   // An orthographic POV keeps the same mathematical scale as the bird's-eye map.
   const povCamera = new THREE.OrthographicCamera(-8, 8, 5, -5, 0.1, 100);
   povCamera.up.set(0, 0, 1);
-  let activeCamera = birdCamera;
+  let activeCamera = summitCamera;
   let cinematicMode = "bird";
   let cinematicAttack = null;
   let cinematicTimer = 0;
@@ -44,7 +56,7 @@ export function createView(container, hud, controls) {
   const effects = [];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, window.innerWidth < 600 ? 1.5 : 2));
   renderer.shadowMap.enabled = true;
   renderer.localClippingEnabled = true;
   const curveBounds = [
@@ -56,11 +68,19 @@ export function createView(container, hud, controls) {
   renderer.domElement.tabIndex = 0;
   renderer.domElement.setAttribute("aria-label", "Select a character in the combat arena");
   container.prepend(renderer.domElement);
+  renderer.domElement.addEventListener("click", () => {
+    if (viewMode === "character" && activeCamera === characterCamera) renderer.domElement.requestPointerLock?.();
+  });
+  document.addEventListener("mousemove", (event) => {
+    if (document.pointerLockElement !== renderer.domElement) return;
+    lookYaw += event.movementX * 0.0025;
+    lookPitch = Math.max(-1.2, Math.min(1.2, lookPitch - event.movementY * 0.0025));
+  });
 
-  const ambient = new THREE.HemisphereLight(0xe9f3ff, 0x344259, 2);
+  const ambient = new THREE.HemisphereLight(0xf6fbff, 0x7eabd1, 2);
   ambient.position.set(0, 0, 1);
   scene.add(ambient);
-  const light = new THREE.DirectionalLight(0xffffff, 2.5);
+  const light = new THREE.DirectionalLight(0xfff5db, 2.3);
   light.position.set(-4, 8, 10);
   light.castShadow = true;
   light.shadow.camera.left = -18;
@@ -70,38 +90,7 @@ export function createView(container, hud, controls) {
   light.shadow.mapSize.set(1024, 1024);
   scene.add(light);
 
-  // The ground is scenery only. Falling below z = -5 ends the round.
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(40, 40),
-    new THREE.MeshStandardMaterial({ color: 0x18263b, roughness: 1 }),
-  );
-  ground.position.z = -5.8;
-  ground.receiveShadow = true;
-  scene.add(ground);
-  const groundGrid = new THREE.GridHelper(40, 40, 0x405979, 0x293e59);
-  groundGrid.rotation.x = Math.PI / 2;
-  groundGrid.position.z = -5.79;
-  scene.add(groundGrid);
-
-  // The platform's upper face lies on the XY plane at z = 0.
-  const platform = new THREE.Mesh(
-    new THREE.BoxGeometry(ARENA.halfWidth * 2, ARENA.depth, ARENA.thickness),
-    new THREE.MeshStandardMaterial({ color: 0x53647d, roughness: 0.9 }),
-  );
-  platform.position.z = ARENA.top - ARENA.thickness / 2;
-  platform.castShadow = true;
-  platform.receiveShadow = true;
-  scene.add(platform);
-
-  OBSTACLES.forEach((obstacle) => {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(obstacle.width, obstacle.depth, obstacle.height),
-      new THREE.MeshStandardMaterial({ color: 0xdca25a, roughness: 0.8 }),
-    );
-    mesh.position.set(obstacle.x, obstacle.y, obstacle.height / 2);
-    mesh.castShadow = true;
-    scene.add(mesh);
-  });
+  createSummit(scene);
 
 
   const gridLines = new THREE.LineSegments(
@@ -128,7 +117,7 @@ export function createView(container, hud, controls) {
   let ticks = [];
 
   function positionLabel(label, point) {
-    const projected = new THREE.Vector3(point.x, point.y, 0).project(birdCamera);
+    const projected = new THREE.Vector3(point.x, point.y, 0).project(overviewCamera());
     const x = (projected.x + 1) * container.clientWidth / 2;
     label.style.left = label.classList.contains("coordinate-label")
       ? Math.max(68, Math.min(container.clientWidth - 68, x)) + "px" : x + "px";
@@ -138,8 +127,8 @@ export function createView(container, hud, controls) {
   function drawGrid(players, selectedIndex) {
     const shooter = players[selectedIndex];
     const visible = Boolean(shooter && !shooter.eliminated);
-    gridLines.visible = gridAxes.visible = visible && activeCamera === birdCamera;
-    labels.hidden = !visible || activeCamera !== birdCamera;
+    gridLines.visible = gridAxes.visible = visible && activeCamera !== povCamera && viewMode !== "character";
+    labels.hidden = !visible || activeCamera === povCamera || viewMode === "character";
     if (!visible) return;
     const origin = shooter.position;
     const key = origin.x + "," + origin.y;
@@ -232,7 +221,8 @@ export function createView(container, hud, controls) {
   function drawPlayers(players, selectedIndex = null) {
     playerMeshes.forEach((mesh, index) => {
       const player = players[index];
-      mesh.visible = Boolean(player && !player.eliminated);
+      mesh.visible = Boolean(player && !player.eliminated &&
+        !(viewMode === "character" && index === selectedIndex));
       if (!mesh.visible) return;
       const position = player.position;
       mesh.position.set(position.x, position.y, position.z);
@@ -287,8 +277,8 @@ export function createView(container, hud, controls) {
     cinematicTimer = 0;
     impactPoint = null;
     activeCamera = povCamera;
-    povCamera.position.copy(birdCamera.position);
-    povCamera.quaternion.copy(birdCamera.quaternion);
+    povCamera.position.copy(overviewCamera().position);
+    povCamera.quaternion.copy(overviewCamera().quaternion);
   }
 
   function notifyProjectileStopped(attack) {
@@ -305,14 +295,14 @@ export function createView(container, hud, controls) {
   }
 
   function finishProjectilePOV() {
-    if (activeCamera === birdCamera) return;
+    if (activeCamera === overviewCamera()) return;
     cinematicMode = "return";
     cinematicTimer = 0;
   }
 
   function setProjectilePOVEnabled(enabled) {
     if (!enabled) {
-      activeCamera = birdCamera;
+      activeCamera = overviewCamera();
       cinematicMode = "bird";
       cinematicAttack = null;
       impactPoint = null;
@@ -323,7 +313,7 @@ export function createView(container, hud, controls) {
   }
 
   function resetCinematic() {
-    activeCamera = birdCamera;
+    activeCamera = overviewCamera();
     cinematicMode = "bird";
     cinematicAttack = null;
     impactPoint = null;
@@ -349,9 +339,9 @@ export function createView(container, hud, controls) {
     }
     if (cinematicMode === "return") {
       cinematicTimer += dt;
-      smoothCamera(birdCamera.position, new THREE.Vector3(0, 0, 0), 1 - Math.exp(-dt * 7));
+      smoothCamera(overviewCamera().position, new THREE.Vector3(0, 0, 0), 1 - Math.exp(-dt * 7));
       if (cinematicTimer > 0.35) {
-        activeCamera = birdCamera;
+        activeCamera = overviewCamera();
         cinematicMode = "bird";
         cinematicAttack = null;
         impactPoint = null;
@@ -447,8 +437,8 @@ export function createView(container, hud, controls) {
         (event.clientX - rect.left) / rect.width * 2 - 1,
         -(event.clientY - rect.top) / rect.height * 2 + 1,
       );
-      if (activeCamera !== birdCamera) return;
-      raycaster.setFromCamera(point, birdCamera);
+      if (activeCamera === povCamera || viewMode === "character") return;
+      raycaster.setFromCamera(point, overviewCamera());
       const hit = raycaster.intersectObjects(playerMeshes.filter((mesh) => mesh.visible), false)[0];
       if (hit) select(hit.object.userData.playerIndex);
       renderer.domElement.focus({ preventScroll: true });
@@ -491,6 +481,12 @@ export function createView(container, hud, controls) {
     const height = container.clientHeight;
     const aspect = width / height;
     frameCamera(birdCamera, aspect, (hud.offsetHeight + 24) / height, (controls.offsetHeight + 24) / height);
+    const distance = Math.max(34, 30 / aspect);
+    summitCamera.position.set(0, -distance * 0.8, distance * 0.7);
+    summitCamera.lookAt(0, 0, -1.5);
+    summitCamera.aspect = characterCamera.aspect = aspect;
+    summitCamera.updateProjectionMatrix();
+    characterCamera.updateProjectionMatrix();
     const povHalfHeight = 5;
     povCamera.left = -povHalfHeight * aspect;
     povCamera.right = povHalfHeight * aspect;
@@ -503,6 +499,29 @@ export function createView(container, hud, controls) {
   const observer = new ResizeObserver(resize);
   [container, hud, controls].forEach((element) => observer.observe(element));
   resize();
+
+  function setViewMode(mode) {
+    viewMode = mode;
+    if (document.pointerLockElement === renderer.domElement && mode !== "character") document.exitPointerLock();
+    if (activeCamera !== povCamera) activeCamera = overviewCamera();
+  }
+
+  function updateCharacterCamera(players, selectedIndex) {
+    if (viewMode !== "character" || selectedIndex == null) return;
+    const player = players[selectedIndex];
+    if (!player || player.eliminated) return;
+    if (lookAtIndex !== selectedIndex) {
+      lookAtIndex = selectedIndex;
+      lookYaw = player.team === 0 ? 0 : Math.PI;
+      lookPitch = -0.06;
+    }
+    characterCamera.position.set(player.position.x, player.position.y, player.position.z + 0.65);
+    characterCamera.lookAt(
+      player.position.x + Math.cos(lookYaw) * Math.cos(lookPitch),
+      player.position.y + Math.sin(lookYaw) * Math.cos(lookPitch),
+      player.position.z + 0.65 + Math.sin(lookPitch),
+    );
+  }
 
   return {
     canvas: renderer.domElement,
@@ -517,6 +536,8 @@ export function createView(container, hud, controls) {
     finishProjectilePOV,
     setProjectilePOVEnabled,
     resetCinematic,
+    setViewMode,
+    updateCharacterCamera,
     updateCinematic,
     createImpact,
     updateEffects,

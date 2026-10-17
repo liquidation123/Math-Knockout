@@ -11,6 +11,7 @@ const expression = document.querySelector("#expression");
 const fire = document.querySelector("#fire");
 const errorLabel = document.querySelector("#equation-error");
 const povToggle = document.querySelector("#projectile-pov");
+const viewMode = document.querySelector("#view-mode");
 let round;
 let clock;
 let previousTime;
@@ -65,6 +66,14 @@ document.querySelector("#restart").addEventListener("click", resetRound);
 povToggle.addEventListener("change", () => {
   view.setProjectilePOVEnabled(povToggle.checked);
 });
+viewMode.addEventListener("change", () => {
+  view.setViewMode(viewMode.value);
+  document.querySelector("#camera-help").hidden = viewMode.value !== "character";
+});
+if (window.innerWidth < 600) {
+  viewMode.value = "map";
+  view.setViewMode("map");
+}
 view.onCharacterClick((index) => {
   if (round.result) return;
   if (selectCharacter(round, index)) {
@@ -155,6 +164,7 @@ function animate(timestamp) {
   const selectedIndex = !round.result ? round.selected[round.currentTeam] : null;
   view.drawGrid(round.players, selectedIndex);
   view.drawPlayers(round.players, selectedIndex);
+  view.updateCharacterCamera(round.players, selectedIndex);
   view.drawProjectile(round.attack);
   view.updateCinematic(round.attack, seconds, povToggle.checked);
   view.updateEffects(seconds);

@@ -97,3 +97,6 @@ p { margin: 6px 0 0; font-size: 12px; line-height: 1.35; }
   font-size: 0.78rem;
   color: #dbe7f7;
 }
+.view-choice { margin-left: 14px; font-size: 0.78rem; color: #dbe7f7; }
+.view-choice select { margin-left: 5px; padding: 3px 6px; border: 1px solid #879bb7;
+  border-radius: 4px; background: #25364d; color: white; }
