@@ -197,24 +197,80 @@ export function createView(container, hud, controls) {
     });
   }
 
-  const cubeGeometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
+  const portrait = document.createElement("canvas");
+  portrait.width = portrait.height = 256;
+  const context = portrait.getContext("2d");
+  // A drawn character replaces the old cube even when the drawing page was skipped.
+  function paintCharacter(image) {
+    context.clearRect(0, 0, 256, 256);
+    if (image) {
+      const source = document.createElement("canvas");
+      source.width = image.width;
+      source.height = image.height;
+      const sourceContext = source.getContext("2d");
+      sourceContext.drawImage(image, 0, 0);
+      const pixels = sourceContext.getImageData(0, 0, source.width, source.height).data;
+      let left = source.width, top = source.height, right = 0, bottom = 0;
+      for (let y = 0; y < source.height; y += 1) for (let x = 0; x < source.width; x += 1) {
+        if (pixels[(y * source.width + x) * 4 + 3] < 16) continue;
+        left = Math.min(left, x); right = Math.max(right, x);
+        top = Math.min(top, y); bottom = Math.max(bottom, y);
+      }
+      if (right > left && bottom > top) {
+        const size = Math.max(right - left + 1, bottom - top + 1);
+        context.drawImage(source, left, top, right - left + 1, bottom - top + 1,
+          28 + (200 - (right - left + 1) / size * 200) / 2,
+          28 + (200 - (bottom - top + 1) / size * 200) / 2,
+          (right - left + 1) / size * 200, (bottom - top + 1) / size * 200);
+        return;
+      }
+    }
+    context.strokeStyle = "#073b96";
+    context.lineWidth = 12;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.arc(128, 75, 35, 0, Math.PI * 2);
+    context.moveTo(128, 110); context.lineTo(128, 180);
+    context.moveTo(128, 130); context.lineTo(78, 155);
+    context.moveTo(128, 130); context.lineTo(178, 155);
+    context.moveTo(128, 180); context.lineTo(91, 223);
+    context.moveTo(128, 180); context.lineTo(165, 223);
+    context.stroke();
+  }
+  paintCharacter();
+  const characterTexture = new THREE.CanvasTexture(portrait);
+  try {
+    const saved = JSON.parse(sessionStorage.getItem("outMathedCharacter"));
+    if (saved?.image?.startsWith("data:image/png;base64,")) {
+      const image = new Image();
+      image.onload = () => { paintCharacter(image); characterTexture.needsUpdate = true; };
+      image.src = saved.image;
+    }
+  } catch { /* Storage is optional; the illustrated character remains available. */ }
+
   const playerMeshes = Array.from({ length: 6 }, (_, index) => {
     const color = index < 3 ? 0x76b7ff : 0xff8c99;
-    const mesh = new THREE.Mesh(
-      cubeGeometry,
-      new THREE.MeshStandardMaterial({ color, roughness: 0.6 }),
+    const group = new THREE.Group();
+    const badge = new THREE.Mesh(
+      new THREE.CircleGeometry(PLAYER_SIZE * 0.56, 32),
+      new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }),
     );
-    mesh.castShadow = true;
-    mesh.userData.playerIndex = index;
-    const outline = new THREE.LineSegments(
-      new THREE.EdgesGeometry(cubeGeometry),
-      new THREE.LineBasicMaterial({ color: 0xffef8b, depthTest: false }),
+    badge.position.z = -0.04;
+    group.add(badge);
+    const character = new THREE.Sprite(new THREE.SpriteMaterial({ map: characterTexture, transparent: true }));
+    character.scale.set(PLAYER_SIZE * 1.18, PLAYER_SIZE * 1.18, 1);
+    character.userData.playerIndex = index;
+    group.add(character);
+    const outline = new THREE.Mesh(
+      new THREE.RingGeometry(PLAYER_SIZE * 0.55, PLAYER_SIZE * 0.68, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffef8b, side: THREE.DoubleSide, depthTest: false }),
     );
-    outline.scale.setScalar(1.2);
+    outline.position.z = 0.02;
     outline.renderOrder = 3;
-    mesh.add(outline);
-    scene.add(mesh);
-    return mesh;
+    group.add(outline);
+    scene.add(group);
+    return { group, character, badge, outline };
   });
 
   const projectile = new THREE.Mesh(
@@ -248,14 +304,14 @@ export function createView(container, hud, controls) {
   scene.add(trail);
 
   function drawPlayers(players, selectedIndex = null) {
-    playerMeshes.forEach((mesh, index) => {
+    playerMeshes.forEach(({ group, badge, outline }, index) => {
       const player = players[index];
-      mesh.visible = Boolean(player && !player.eliminated);
-      if (!mesh.visible) return;
+      group.visible = Boolean(player && !player.eliminated);
+      if (!group.visible) return;
       const position = player.position;
-      mesh.position.set(position.x, position.y, position.z);
-      mesh.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
-      mesh.children[0].visible = index === selectedIndex;
+      group.position.set(position.x, position.y, position.z);
+      badge.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
+      outline.visible = index === selectedIndex;
     });
   }
 
@@ -434,7 +490,8 @@ export function createView(container, hud, controls) {
       );
       if (activeCamera !== birdCamera) return;
       raycaster.setFromCamera(point, birdCamera);
-      const hit = raycaster.intersectObjects(playerMeshes.filter((mesh) => mesh.visible), false)[0];
+      const hit = raycaster.intersectObjects(playerMeshes.filter(({ group }) => group.visible)
+        .map(({ character }) => character), false)[0];
       if (hit) select(hit.object.userData.playerIndex);
       else if (selectCurvePoint) {
         const point = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -0.5), new THREE.Vector3());
