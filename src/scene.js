@@ -296,7 +296,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     texture.magFilter = THREE.NearestFilter;
     const drawing = new THREE.Group();
     const aspect = width / height;
-    const art = new THREE.Mesh(new THREE.PlaneGeometry(2.4 * Math.min(aspect, 1), 2.4 / Math.max(aspect, 1)),
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(3.1 * Math.min(aspect, 1), 3.1 / Math.max(aspect, 1)),
       new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
     drawing.add(art);
     mesh.add(drawing);
