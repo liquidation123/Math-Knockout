@@ -9,6 +9,8 @@ const types = {
   ".html": "text/html",
   ".js": "text/javascript",
   ".css": "text/css",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
 };
 
 createServer(async (request, response) => {
