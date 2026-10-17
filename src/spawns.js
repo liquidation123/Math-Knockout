@@ -1,4 +1,4 @@
-import { ARENA, PLAYER_SIZE, OBSTACLES } from "./physics.js";
+import { ARENA, PLAYER_SIZE, OBSTACLES, insideArena } from "./physics.js";
 
 export const SPAWN_RULES = {
   edgeMargin: 1.5, minAbsX: 7, teammateSpacing: 2.5,
@@ -9,7 +9,8 @@ export function validSpawn(point, team, teammates = []) {
   const signedX = point.x * (team === 0 ? -1 : 1);
   if (signedX < SPAWN_RULES.minAbsX ||
     signedX > ARENA.halfWidth - SPAWN_RULES.edgeMargin ||
-    Math.abs(point.y) > ARENA.depth / 2 - SPAWN_RULES.edgeMargin) return false;
+    Math.abs(point.y) > ARENA.depth / 2 - SPAWN_RULES.edgeMargin ||
+    !insideArena(point.x, point.y, SPAWN_RULES.edgeMargin)) return false;
   if (teammates.some((other) =>
     Math.hypot(point.x - other.x, point.y - other.y) < SPAWN_RULES.teammateSpacing)) return false;
   const padding = PLAYER_SIZE / 2 + SPAWN_RULES.obstacleClearance;
@@ -37,7 +38,7 @@ export function generateSpawns(random = Math.random) {
         break;
       }
       // Replace the whole team so fallback slots cannot overlap earlier random picks.
-      if (!placed) return [-5, 0, 5].map((y) => ({ x: sign * 10, y }));
+      if (!placed) return [-4.5, 0, 4.5].map((y) => ({ x: sign * 10, y }));
     }
     return points;
   });

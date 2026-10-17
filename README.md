@@ -1,16 +1,92 @@
-# Math-Knockout
+# Out-Mathed
 
-## Run locally
+Two equation-combat modes share one mountain summit. Projectile Duel uses team projectile attacks; Bump Duel uses simultaneous character launches and contact knockback. It uses plain HTML/CSS/JavaScript, Three.js for rendering, `ws` for the room connection, and the existing equation parser and fixed-step physics.
 
-With Node.js 22 or newer:
+## Game modes
+
+- **Projectile Duel**: `/play.html`. Local, shared-screen play with three characters per
+  team. Select a surviving character; explicit, parametric, polar and implicit
+  previews, Force, recoil, piercing bullets, single-hit damage, and victory screens
+  remain from main. Contact between characters does not deal damage.
+- **Bump Duel**: `/bump.html`. Two tabs/devices join an invite room. Each player
+  secretly locks an explicit equation, then both characters launch together.
+  Contact applies momentum-based impulses, not projectile damage. The last
+  character on the mountain wins; simultaneous falls are a draw.
+
+The homepage has both choices. Each can go through the same 10-second drawing
+screen or use the **Play with cubes** shortcut. A drawing becomes a visual
+decoration on Projectile Duel's cubes (no physics changes); Bump Duel keeps its
+drawn silhouette and ink-based mass/radius. **Change mode** returns home.
+Entering either page starts fresh gameplay; drawings remain available in the
+tab's session storage. No combat state is shared between the two entry points.
+Older mountain invite links using `/play.html?room=...` redirect to Bump Duel
+with the same room ID; plain `/play.html` always starts Projectile Duel.
+
+## Shared mountain and deliberate adaptations
+
+Both modes use `assets/mountain.glb`, its painted materials, cliff, foliage,
+clouds and ruins, plus the same warm lighting in `src/mountain.js`.
+The 96-point grass rim is reused by `src/terrain.js` for ground support, falls,
+curve/grid clipping, and projectile edge collisions. The top is flat at Z=0;
+Z remains height. A character's centre leaving the rim loses support, as before.
+Lower cliff surfaces and the decorative outer rim are scenery, not landable ground.
+
+The original projectile collision boxes now appear as stone barriers in both
+modes, with exactly matching dimensions. Bump launches now stop at these solid
+barriers instead of passing through them; after contact knockback, characters
+also collide with the barriers. This terrain adaptation does not change launch
+speed, friction, contact impulse strength, bullet speed/damage, Force or recoil.
+Bump's dotted path is still an unobstructed projection; a wall or rival can stop
+or alter actual travel.
+
+Projectile spawns are sampled safely inside the rounded summit, with a bounded
+fallback at x=±10 and y=−4.5,0,4.5. Bump spawns remain (−9.5,0) and (9.5,0).
+Both eliminate falling characters below Z=−5. Restart clears attacks, velocities,
+results and pending Bump countdowns. Leaving a Bump page closes its connection;
+an empty room is removed, and departing silhouettes are cleared for the peer.
+Browser back/forward restoration reloads a game rather than reviving stale state.
+
+## Run
+
+Use Node.js 22 or newer:
 
     npm install
     npm start
 
-Open http://127.0.0.1:5173/. The homepage opens the drawing screen at
-/create.html; the arena is also available directly at /play.html.
+Open `http://127.0.0.1:5173` and choose a mode. For Bump Duel, copy the invite link into another tab or device for Red. A second device needs a reachable Node server address; localhost refers only to its own computer. Run `npm test` for the Node tests. The server binds to localhost by default; set `HOST=0.0.0.0` and `PORT` for a Node host that accepts external connections. The Vercel static build includes the arena assets, but live rooms need a persistent Node/WebSocket host; the current Vercel deployment cannot run the duel server.
 
-Vercel Deployment: https://math-knockout.vercel.app/
+## Bump Duel rules
+
+- The Blender mountain and physics both use the same 28-by-16-unit rounded summit. Going below `z = -5` eliminates a player.
+- Blue starts left, Red right. Their original equation is translated to start at their current position. Blue follows increasing X; Red follows decreasing X without mirroring the curve.
+- The dotted line shows the path and projected stop **without another player's collision**. Hidden opposing input means an exact collision point cannot be predicted before launch.
+- Each player locks one equation. The server reveals only whether each player is ready, then starts a shared 3-second countdown. Both launch on the same server tick.
+- Launch speed starts at 10 units/second and loses 4 units/second² through friction. The unobstructed travel distance is about `10² / (2 × 4) = 12.5` world units. A collision gives equal and opposite impulses; mass determines the resulting velocity change. A miss normally stops on the summit.
+- A saved drawing is reduced to a 128-by-80 alpha mask. The server counts filled pixels to derive approximate mass and collision radius; more ink gives more weight and a larger hit region. Each browser renders the opponent's mask as a vertical silhouette. An absent drawing uses a cube.
+- If both players survive, they choose again from their new positions. The last one on the summit wins; simultaneous falls are a draw.
+
+## Main files
+
+| File | Purpose |
+| --- | --- |
+| `index.html`, `style.css` | Home page with two mode choices. |
+| `create.html`, `create.js`, `create.css` | Timed 20L drawing screen; saves the character in session storage. |
+| `play.html`, `game.css`, `src/main.js` | Projectile controls, selection, previews, attacks and results. |
+| `bump.html`, `duel.css`, `src/duel-client.js` | Bump interface, preview, countdown, and room messages. |
+| `server.js` | Static files, conditional asset caching, two-player WebSocket rooms, authoritative physics snapshots. |
+| `src/duel.js` | Equation lock, simultaneous launch, path motion, collisions, and winner. |
+| `src/equations.js`, `src/physics.js` | Reused parser, sampled curves, gravity, friction, impulse, fixed time step, and fall boundary. |
+| `src/scene.js`, `src/mountain.js`, `src/terrain.js` | Shared mountain, matching summit outline, cameras, previews and drawings. |
+| `tools/build_mountain.py` | Editable Blender generator for the summit, ruins, cliff, shrubs, and clouds. |
+| `assets/mountain.blend`, `assets/mountain.glb` | Blender source and browser-ready model with embedded painted grass texture. |
+| `tests/` | Node tests for the duel and existing drawing/math/physics features. |
+
+The combat engines stay separate: `src/combat.js` / `src/projectile.js` for Projectile Duel, and `src/duel.js` on the server for Bump Duel. There is no global mode flag that changes damage rules.
+
+## Current limits
+
+The mountain is a lightweight, editable interpretation of the supplied single-view illustration. A single image does not reveal the rear or true geometry, so this is not an exact reconstruction. Player silhouettes are textured planes with approximate circular collision regions. This does **not** calculate the drawing's center of mass, rotational inertia, or full 3D rigid-body contacts. Those require a separate shape-to-collider pipeline and balance rules. The local room server is a working two-browser prototype, not a deployed public multiplayer service with matchmaking or accounts.
+
 ## Round result screen
 
 Finished rounds open a themed result dialog with the winning team, elapsed time,

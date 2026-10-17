@@ -1,5 +1,6 @@
 import { createVictoryScreen } from "./victory.js";
 import { createEquationInput } from "./curve-input.js";
+import { readSavedMask } from "./saved-character.js";
 import { createView } from "./scene.js";
 import { takeFixedSteps } from "./physics.js";
 import { createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES } from "./combat.js";
@@ -8,6 +9,18 @@ const view = createView(
   document.querySelector("#arena"), document.querySelector("#hud"), document.querySelector("#controls"),
 );
 const status = document.querySelector("#status");
+let mountainReady = false;
+view.ready.then(() => {
+  mountainReady = true;
+  document.querySelector("#loading").hidden = true;
+}).catch((error) => {
+  document.querySelector("#loading").textContent = "Mountain failed to load. Reload to retry.";
+  console.error("Mountain load failed:", error);
+});
+readSavedMask().then((mask) => {
+  if (mask) for (let index = 0; index < 6; index += 1) view.setPlayerShape(index, mask);
+}).catch((error) => console.warn("Saved drawing unavailable; using cubes.", error));
+window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 const expression = document.querySelector("#expression");
 const fire = document.querySelector("#fire");
 const errorLabel = document.querySelector("#equation-error");
@@ -160,7 +173,7 @@ function updateReadout() {
   const selected = round.players[round.selected[round.currentTeam]];
   document.querySelector("#turn").textContent = round.result ? "Round complete" : TEAM_NAMES[round.currentTeam] + "'s turn";
   document.querySelector("#caster").textContent = round.result ? "" : selected.name + " selected";
-  fire.disabled = Boolean(!preview || preview.error || round.result || round.attack ||
+  fire.disabled = Boolean(!mountainReady || !preview || preview.error || round.result || round.attack ||
     selected.eliminated || Math.abs(selected.position.z - 0.5) > 0.05);
   if (status.textContent !== round.message) status.textContent = round.message;
   if (round.result) victory.show(round);

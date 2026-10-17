@@ -3,13 +3,14 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Out-Mathed</title>
+    <title>Out-Mathed — Projectile Duel</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/game.css">
     <script type="importmap">
       {
         "imports": {
           "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/",
           "math-expression-evaluator": "/src/math-parser-browser.js"
         }
       }
@@ -18,10 +19,12 @@
   <body>
     <main>
       <section id="arena" aria-label="3D combat arena"></section>
+      <div id="loading" role="status">Loading the mountain…</div>
 
       <header id="hud" class="panel">
         <div class="title-row">
-          <h1>Out-Mathed</h1>
+          <h1>Projectile Duel</h1>
+          <a class="mode-link" href="/">Change mode</a>
           <button id="restart" type="button">New round</button>
         </div>
         <section class="teams" aria-label="Team health">
@@ -118,6 +121,13 @@
         </div>
       </section>
     </main>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module">
+      // Mountain-branch invite links used play.html?room=... before modes existed.
+      if (new URLSearchParams(location.search).has("room")) {
+        location.replace("/bump.html" + location.search);
+      } else {
+        import("/src/main.js");
+      }
+    </script>
   </body>
 </html>

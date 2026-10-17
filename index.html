@@ -26,9 +26,20 @@
       <section class="hero" aria-labelledby="hero-title">
         <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> THE EQUATION ARENA <span class="eyebrow-line" aria-hidden="true"></span></p>
         <h1 id="hero-title">out-mathed</h1>
-        <p class="tagline">Plot a path. Land a hit. Be the last team standing.</p>
-        <a class="play-button" href="/create.html"><span>PLAY</span><span class="play-arrow" aria-hidden="true">↗</span></a>
-        <p class="play-note">2 PLAYERS <span aria-hidden="true">·</span> ONE SCREEN <span aria-hidden="true">·</span> ALL BRAINS</p>
+        <p class="tagline">One mountain. Two ways to out-math your rival.</p>
+        <section id="modes" class="mode-choices" aria-label="Choose a game mode">
+          <article class="mode-card">
+            <a class="play-button" href="/create.html?mode=projectile">Projectile Duel</a>
+            <p>One screen · Three characters per team.<br>Plot a glowing shot. Set Force. Fire with recoil.</p>
+            <a class="quick-play" href="/play.html">Play with cubes →</a>
+          </article>
+          <article class="mode-card">
+            <a class="play-button" href="/create.html?mode=bump">Bump Duel</a>
+            <p>Two tabs or devices · One character each.<br>Lock secret paths. Launch together. Bump rivals off.</p>
+            <a class="quick-play" href="/bump.html">Play with cubes →</a>
+          </article>
+        </section>
+        <p class="play-note">CHOOSE A MODE <span aria-hidden="true">·</span> DRAW YOUR CHARACTER <span aria-hidden="true">·</span> ALL BRAINS</p>
       </section>
 
       <footer class="site-footer">
@@ -42,16 +53,17 @@
       <p class="guide-kicker">THE SHORT VERSION</p>
       <h2 id="guide-title">How to play</h2>
       <ol>
-        <li><span>01</span><div><strong>Choose a cube</strong><p>Blue and Red take turns. Click one of your surviving teammates.</p></div></li>
-        <li><span>02</span><div><strong>Write an equation</strong><p>Your curve becomes the path of your shot. Preview it, then fire.</p></div></li>
-        <li><span>03</span><div><strong>Knock them out</strong><p>Hit rivals and push them off the arena. Eliminate the whole team to win.</p></div></li>
+        <li><span>01</span><div><strong>Choose and draw</strong><p>Pick a mode, draw within 20L of ink, or jump in with cubes.</p></div></li>
+        <li><span>02</span><div><strong>Projectile Duel</strong><p>Take turns on one screen. Select a teammate, preview an equation, choose Force, then fire. Shots pierce enemies; stone walls block them.</p></div></li>
+        <li><span>03</span><div><strong>Bump Duel</strong><p>Copy the invite link into a second tab or device. Lock secret equations, launch together, and win by contact knockback. No bullets or projectile damage.</p></div></li>
       </ol>
-      <a class="guide-play" href="/create.html">LET'S PLAY <span aria-hidden="true">↗</span></a>
+      <a class="guide-play" href="/#modes">CHOOSE A MODE <span aria-hidden="true">↗</span></a>
     </dialog>
     <script>
       const guide = document.querySelector('#guide');
       document.querySelector('#guide-trigger').addEventListener('click', () => guide.showModal());
       guide.addEventListener('click', (event) => { if (event.target === guide) guide.close(); });
+      document.querySelector('.guide-play').addEventListener('click', () => guide.close());
     </script>
   </body>
 </html>

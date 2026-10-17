@@ -48,6 +48,9 @@ if (typeof document !== 'undefined') {
   const undo = document.querySelector('#undo');
   const clear = document.querySelector('#clear');
   const arena = document.querySelector('#arena-link');
+  const mode = new URLSearchParams(window.location?.search || '').get('mode');
+  arena.href = mode === 'bump' ? '/bump.html' : '/play.html';
+  arena.textContent = mode === 'bump' ? 'Start Bump Duel →' : 'Start Projectile Duel →';
   const history = [];
   let tool = 'pencil';
   let active = null;
@@ -78,7 +81,7 @@ if (typeof document !== 'undefined') {
     window.outMathedCharacter = character;
     try {
       sessionStorage.setItem('outMathedCharacter', JSON.stringify(character));
-      say('Time! Your character is locked and saved for the future battle system.');
+      say('Time! Your character is saved. Start your selected game mode below.');
     } catch {
       say('Time! Your character is locked. Browser storage is unavailable.');
     }
