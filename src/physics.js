@@ -1,13 +1,25 @@
 export const PLAYER_SIZE = 1;
-export const ARENA = { halfWidth: 10, depth: 8, top: 0, thickness: 0.6, fallHeight: -5 };
+export const ARENA = { halfWidth: 14, depth: 16, top: 0, thickness: 0.6, fallHeight: -5 };
 export const FIXED_STEP = 1 / 120;
 export const GRAVITY = 12;
 export const GROUND_FRICTION = 4;
-export const MOVE_SPEED = 3;
+// Every visible box is also one collision rectangle; gaps have no hidden collider.
 export const OBSTACLES = [
-  { x: -2, y: 3, width: 1.2, depth: 1, height: 1.4 },
-  { x: 0, y: 1, width: 1.2, depth: 0.8, height: 1.4 },
-  { x: 2, y: -3, width: 1.2, depth: 1, height: 1.4 },
+  // Two open L-shaped walls.
+  { x: -3.6, y: 4, width: 0.8, depth: 4, height: 1.4 },
+  { x: -2, y: 5.6, width: 4, depth: 0.8, height: 1.4 },
+  { x: 3.6, y: -4, width: 0.8, depth: 4, height: 1.4 },
+  { x: 2, y: -5.6, width: 4, depth: 0.8, height: 1.4 },
+  // Staggered barriers leave the middle firing corridor open.
+  { x: -1.5, y: -3, width: 0.8, depth: 2, height: 1.4 },
+  { x: 1.5, y: 3, width: 0.8, depth: 2, height: 1.4 },
+  // Block clusters have 1.6-unit gaps, wider than a character.
+  { x: 4.8, y: 5.8, width: 1, depth: 1, height: 1.4 },
+  { x: 4.8, y: 3.2, width: 1, depth: 1, height: 1.4 },
+  { x: 2.2, y: 5.8, width: 1, depth: 1, height: 1.4 },
+  { x: -4.8, y: -5.8, width: 1, depth: 1, height: 1.4 },
+  { x: -4.8, y: -3.2, width: 1, depth: 1, height: 1.4 },
+  { x: -2.2, y: -5.8, width: 1, depth: 1, height: 1.4 },
 ];
 
 export function createPlayer(name, x, y = 0, z = 3, team = 0) {
@@ -22,17 +34,13 @@ export function createPlayer(name, x, y = 0, z = 3, team = 0) {
   };
 }
 
-export function updatePlayer(player, dt, movement = { x: 0, y: 0 }) {
+export function updatePlayer(player, dt) {
   if (player.eliminated) return;
   const halfSize = PLAYER_SIZE / 2;
   const previousBottom = player.position.z - halfSize;
-  const length = Math.hypot(movement.x, movement.y);
-  const walkX = length ? movement.x / length * MOVE_SPEED : 0;
-  const walkY = length ? movement.y / length * MOVE_SPEED : 0;
-
-  // Walking adds to knockback; normalize input so diagonal walking is not faster.
-  moveAxis(player, "x", (player.velocity.x + walkX) * dt);
-  moveAxis(player, "y", (player.velocity.y + walkY) * dt);
+  // Only physics velocity moves characters; there is no direct movement input.
+  moveAxis(player, "x", player.velocity.x * dt);
+  moveAxis(player, "y", player.velocity.y * dt);
   // Z is height. Semi-implicit Euler updates vertical velocity before position.
   player.velocity.z -= GRAVITY * dt;
   player.position.z += player.velocity.z * dt;

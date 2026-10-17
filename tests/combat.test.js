@@ -6,7 +6,10 @@ import { createRound, updateRound, firePreview, selectCharacter, TURN_INTERVAL }
 
 function groundedRound(automatic = false) {
   const round = createRound(automatic);
-  round.players.forEach((player) => { player.position.z = 0.5; });
+  // Fixed test fixture isolates combat rules from random layout generation.
+  round.players.forEach((player, index) => {
+    player.position = { x: player.team === 0 ? -10 : 10, y: [-5, 0, 5][index % 3], z: 0.5 };
+  });
   return round;
 }
 function previewFor(round, expression = "0") {
@@ -45,16 +48,17 @@ test("selection permits only a surviving character on the current team", () => {
 });
 
 test("the selected character anchors preview and the fired snapshot for all example inputs", () => {
-  for (const text of ["(x-1)^2 + 1", "e^x", "2sin(1/2 x) - 1"]) {
+  for (const text of ["6", "x+6", "(x-1)^2 + 1", "e^x", "2sin(1/2 x) - 1", "1/x"]) {
     const round = groundedRound();
     selectCharacter(round, 0);
     const preview = previewFor(round, text);
     assert.equal(preview.error, "");
     assert.ok(firePreview(round, 0, preview));
+    assert.deepEqual(round.attack.path[0], round.players[0].position);
     assert.deepEqual(round.attack.path, preview.path);
     assert.notEqual(round.attack.path, preview.path);
     assert.equal(round.attack.equation.expression, text);
-    assert.deepEqual([round.attack.origin.x, round.attack.origin.y], [-6, -2]);
+    assert.deepEqual([round.attack.origin.x, round.attack.origin.y], [-10, -5]);
     const frozen = JSON.stringify(round.attack.path);
     round.players[0].position.x += 1;
     round.players[0].position.y += 1;
@@ -136,7 +140,7 @@ test("simultaneous team elimination is a draw, and restart restores all six", ()
 });
 
 test("automatic casts alternate teams at the existing cadence", () => {
-  const round = createRound(true);
+  const round = groundedRound(true);
   const casts = [];
   for (let tick = 0; casts.length < 6; tick += 1) {
     const before = round.castCount;
@@ -150,9 +154,13 @@ test("automatic casts alternate teams at the existing cadence", () => {
   }
 });
 
-test("a full team round completes identically at 30, 60, and 144 FPS", () => {
+test("a fixed-corridor team round completes identically at 30, 60, and 144 FPS", () => {
   function simulate(fps) {
-    const round = createRound(true);
+    const round = groundedRound(true);
+    round.players.forEach((player, index) => {
+      player.position.x = (player.team === 0 ? -1 : 1) * (10 - index % 3);
+      player.position.y = 0;
+    });
     const clock = { accumulator: 0 };
     for (let frame = 0; frame < fps * 90 && !round.result; frame += 1) {
       takeFixedSteps(clock, 1 / fps, (dt) => updateRound(round, dt));

@@ -1,4 +1,5 @@
 import { ARENA, createPlayer, updatePlayer } from "./physics.js";
+import { generateSpawns } from "./spawns.js";
 import { ATTACK_DURATION, createAttack, updateProjectile } from "./projectile.js";
 export { DAMAGE, KNOCKBACK, ATTACK_DURATION, createAttack } from "./projectile.js";
 
@@ -10,13 +11,11 @@ export const AUTO_EQUATIONS = [
   { name: "y = 0.02x²", evaluate: (x) => 0.02 * x * x, color: 0xef95ed },
 ];
 
-export function createRound(automatic = true) {
-  const players = [];
-  for (let team = 0; team < 2; team += 1) {
-    [-2, 0, 2].forEach((y, index) => {
-      players.push(createPlayer(TEAM_NAMES[team] + " " + (index + 1), team === 0 ? -6 : 6, y, 3, team));
-    });
-  }
+export function createRound(automatic = false, random = Math.random) {
+  const players = generateSpawns(random).map((point, index) => {
+    const team = Math.floor(index / 3);
+    return createPlayer(TEAM_NAMES[team] + " " + (index % 3 + 1), point.x, point.y, 3, team);
+  });
   return {
     players, automatic,
     selected: [1, 4],
@@ -78,7 +77,8 @@ function checkEliminations(round) {
     winner: survivingTeams.every((alive) => !alive) ? "Draw" : TEAM_NAMES[survivingTeams[0] ? 0 : 1],
     reason: "All opposing characters eliminated",
   };
-  round.message = "Round finished after " + round.castCount + " casts.";
+  round.message = round.result.winner === "Draw" ? "Round ended in a draw." :
+    round.result.winner + " wins the round.";
 }
 
 function automaticEquation(round, index) {
@@ -98,10 +98,10 @@ function automaticEquation(round, index) {
   };
 }
 
-export function updateRound(round, dt, movement = []) {
+export function updateRound(round, dt) {
   if (round.result) return;
   round.time += dt;
-  round.players.forEach((player, index) => updatePlayer(player, dt, movement[index]));
+  round.players.forEach((player) => updatePlayer(player, dt));
   checkEliminations(round);
   if (round.result) return;
 

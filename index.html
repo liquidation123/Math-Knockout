@@ -17,64 +17,45 @@
   </head>
   <body>
     <main>
-      <header>
-        <div>
-          <p class="eyebrow">THREE-VS-THREE EQUATION COMBAT</p>
+      <section id="arena" aria-label="3D combat arena"></section>
+
+      <header id="hud" class="panel">
+        <div class="title-row">
           <h1>Out-Mathed</h1>
+          <button id="restart" type="button">New round</button>
         </div>
-        <p id="stage">Iteration 1 · Equation rendering</p>
+        <section class="teams" aria-label="Team health">
+          <div class="team blue">
+            <div class="team-heading"><strong>Blue</strong><span id="blue-stats">3/3 surviving</span></div>
+            <progress id="blue-health" max="300" value="300" aria-label="Blue team health"></progress>
+            <span id="blue-characters" class="character-list"></span>
+          </div>
+          <div class="team red">
+            <div class="team-heading"><strong>Red</strong><span id="red-stats">3/3 surviving</span></div>
+            <progress id="red-health" max="300" value="300" aria-label="Red team health"></progress>
+            <span id="red-characters" class="character-list"></span>
+          </div>
+        </section>
       </header>
 
-      <section class="players" aria-label="Player statistics">
-        <div class="player blue">
-          <strong>Blue</strong>
-          <progress id="blue-health" max="300" value="300" aria-label="Blue team health"></progress>
-          <span id="blue-stats">3/3 surviving</span>
-          <span id="blue-characters" class="character-list"></span>
-        </div>
-        <div class="player red">
-          <strong>Red</strong>
-          <progress id="red-health" max="300" value="300" aria-label="Red team health"></progress>
-          <span id="red-stats">3/3 surviving</span>
-          <span id="red-characters" class="character-list"></span>
-        </div>
-      </section>
-
-      <section id="equation-controls" hidden aria-label="Equation controls">
+      <section id="controls" class="panel" aria-label="Equation controls">
+        <div class="turn-row"><strong id="turn">Blue's turn</strong><span id="caster"></span></div>
         <div class="equation-row">
-          <strong id="turn">Blue's turn</strong>
-          <span id="caster">Blue 2</span>
           <label for="expression">y =</label>
           <input id="expression" type="text" value="0" maxlength="200"
             spellcheck="false" autocomplete="off" aria-describedby="equation-help equation-error">
           <button id="fire" type="button">Fire</button>
         </div>
-        <p id="equation-help" class="small">
-          Try (x-1)^2 + 1, e^x, or 2sin(1/2 x) - 1.
-          Functions: sin, cos, tan, sqrt, abs, exp, ln, log. Radians; −24 ≤ x ≤ 24.
-        </p>
         <p id="equation-error" role="status"></p>
-        <p id="preview-summary" class="small"></p>
-        <label class="small"><input id="automatic" type="checkbox"> Automatic demo</label>
-        <p class="small">Click one of the current team’s cubes to select it. Blue uses WASD; Red uses arrow keys. Turns alternate after each shot.</p>
-      </section>
-
-      <section id="arena" aria-label="3D combat arena">
+        <p id="equation-help">Click a teammate to select. Preview, then Fire. Characters move only through knockback.</p>
+        <p class="anchoring-help">Curves shift automatically to start at your character (0, 0). One grid square = one unit.</p>
+        <p class="examples">Try (x-1)^2 + 1 · e^x · 2sin(1/2 x) - 1 · Trigonometry uses radians.</p>
+        <p id="status" role="status"></p>
         <div id="result" hidden>
-          <h2 id="winner"></h2>
-          <p id="finish-reason"></p>
+          <strong id="winner"></strong>
+          <span id="finish-reason"></span>
         </div>
       </section>
-
-      <section class="readout">
-        <div>
-          <p id="status" role="status">Three equations on one combat plane.</p>
-          <p id="cast">Gold: y = x · Pink: y = x² · Mint: y = sin(x)</p>
-        </div>
-        <button id="restart" type="button" hidden>Restart round</button>
-      </section>
-      <p id="explanation"></p>
-      <p class="small">Arena: XY · +X right · +Y up · Z height. One world unit is approximately one metre.</p>
     </main>
     <script type="module" src="/src/main.js"></script>
   </body>

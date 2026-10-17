@@ -21,7 +21,7 @@ test("all three requested expressions evaluate against independent calculations"
     assert.ok(preview.sections.length > 0);
     for (const section of preview.sections) {
       for (const point of section) {
-        close(point.y, expected(point.x + 2));
+        close(point.y, expected(point.x + 2) - expected(0));
         assert.equal(point.z, COMBAT_Z);
       }
     }
@@ -42,9 +42,14 @@ test("sampling preserves the bounded domain, real shape, and offsets", () => {
   const sections = sampleEquation(equation, origin);
   assert.equal(sections.length, 1);
   const points = sections[0];
-  assert.equal(points.length, SAMPLE_COUNT + 1);
-  assert.equal(points[0].x, origin.x + DOMAIN_START);
-  assert.equal(points.at(-1).x, origin.x + DOMAIN_END);
+  const line = sampleEquation(parseEquation("x"), origin)[0];
+  assert.equal(line.length, SAMPLE_COUNT + 1);
+  assert.equal(line[0].x, origin.x + DOMAIN_START);
+  assert.equal(line.at(-1).x, origin.x + DOMAIN_END);
+  // The enlarged domain reaches values above the existing |f(x)| <= 1000 cap.
+  assert.ok(points.length < line.length);
+  assert.ok(points.every((point) => point.y - origin.y <= 1000));
+  assert.ok(equation.evaluate(points[0].x - origin.x - 0.05) > 1000);
   assert.deepEqual(points.find((p) => p.x === 4), { x: 4, y: -1, z: COMBAT_Z });
   assert.deepEqual(points.find((p) => p.x === 3), { x: 3, y: 0, z: COMBAT_Z });
 });
@@ -82,8 +87,8 @@ test("reciprocal poles, including between-sample poles, create separate branches
     assert.equal(preview.error, "");
     assert.ok(preview.sections.length >= 2);
     for (const section of preview.sections) {
-      assert.ok(section.every((point) => point.x < pole) ||
-        section.every((point) => point.x > pole));
+      assert.ok(section.every((point) => point.x + preview.anchor.x < pole) ||
+        section.every((point) => point.x + preview.anchor.x > pole));
     }
   }
 });
@@ -101,5 +106,56 @@ test("tangent asymptotes and floor steps are not joined by line segments", () =>
   assert.ok(steps.sections.length > 1);
   for (const section of steps.sections) {
     assert.ok(section.every((point) => point.y === section[0].y));
+  }
+});
+
+
+test("all anchor examples preserve shape in both firing directions and retain the input", () => {
+  const origin = { x: -7.3, y: 2.4 };
+  for (const [text, translated] of [
+    ["6", () => 0], ["x+6", (x) => x], ["e^x", (x) => Math.exp(x) - 1],
+    ["(x-1)^2 + 1", (x) => (x - 1) ** 2 - 1],
+    ["2sin(1/2 x) - 1", (x) => 2 * Math.sin(x / 2)], ["10000", () => 0],
+  ]) {
+    for (const direction of [1, -1]) {
+      const preview = buildPreview(text, origin, direction);
+      assert.equal(preview.error, "", text);
+      assert.equal(preview.equation.expression, text);
+      assert.deepEqual(preview.path[0], { ...origin, z: COMBAT_Z });
+      for (const point of preview.path) {
+        close(point.y - origin.y, translated(point.x - origin.x));
+        assert.ok(direction * (point.x - origin.x) >= -1e-10);
+      }
+    }
+  }
+});
+
+test("undefined zero uses the first finite sample in the firing direction, translating X and Y", () => {
+  const origin = { x: 3.1, y: -1.7 };
+  for (const [text, direction, expectedX] of [
+    ["1/x", 1, 0.05], ["1/x", -1, -0.05], ["ln(x)", 1, 0.05],
+    ["sqrt(x-1)", 1, 1], ["sqrt(-x-1)", -1, -1],
+    ["sqrt(x-1)", -1, 32], ["ln(-x)", 1, -32],
+  ]) {
+    const preview = buildPreview(text, origin, direction);
+    assert.equal(preview.error, "", text);
+    close(preview.anchor.x, expectedX);
+    assert.deepEqual(preview.path[0], { ...origin, z: COMBAT_Z });
+    assert.ok(preview.path.length > 1, "A steep continuous launch must not become an artificial gap.");
+    for (const point of preview.path) {
+      const originalX = point.x - origin.x + preview.anchor.x;
+      close(point.y - origin.y, preview.equation.evaluate(originalX) - preview.anchor.y);
+    }
+  }
+});
+
+test("single-point real branches may fire, while no real launch point reports an error", () => {
+  for (const text of ["sqrt(0-x^2)", "sqrt(x)"]) {
+    const preview = buildPreview(text, { x: 0, y: 0 }, -1);
+    assert.equal(preview.error, "");
+    assert.equal(preview.path.length, 1);
+  }
+  for (const text of ["sqrt(-1)", "1/(x-x)", "sqrt(x-33)"]) {
+    assert.match(buildPreview(text, { x: 0, y: 0 }).error, /No finite launch point/);
   }
 });

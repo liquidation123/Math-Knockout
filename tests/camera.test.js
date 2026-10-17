@@ -35,3 +35,23 @@ test("the complete wider arena stays visible at wide and narrow aspect ratios", 
     assert.ok(Math.abs((camera.right - camera.left) / (camera.top - camera.bottom) - aspect) < 1e-10);
   }
 });
+
+
+test("the complete arena fits between top and bottom controls at desktop and phone sizes", () => {
+  for (const [width, height, hud, controls] of [
+    [1440, 900, 166, 190], [1280, 720, 166, 190], [390, 844, 160, 220],
+    [600, 758, 166, 210], [844, 390, 100, 135], [320, 568, 160, 220],
+  ]) {
+    const camera = createCamera();
+    frameCamera(camera, width / height, hud / height, controls / height);
+    camera.updateMatrixWorld();
+    for (const x of [-ARENA.halfWidth, ARENA.halfWidth]) {
+      for (const y of [-ARENA.depth / 2, ARENA.depth / 2]) {
+        const point = new THREE.Vector3(x, y, 0).project(camera);
+        assert.ok(Math.abs(point.x) < 1);
+        assert.ok(point.y < 1 - 2 * hud / height);
+        assert.ok(point.y > -1 + 2 * controls / height);
+      }
+    }
+  }
+});

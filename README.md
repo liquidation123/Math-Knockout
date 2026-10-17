@@ -18,18 +18,16 @@ Open http://127.0.0.1:5173. No build step or network connection is needed after 
 
 - Blue and Red each have three independently simulated characters, initially 100 HP each.
 - Click a surviving cube on the current team. A yellow outline and the team readout identify it.
-- The selected Blue character moves with WASD; the selected Red character uses arrow keys.
-  Click the arena to focus movement. Typing in the equation field does not move characters.
+- There are no keyboard or direct movement controls. Characters move only through
+  knockback, gravity, and the existing physics.
 - Enter f(x), inspect the dashed white firing path, and press Fire.
-- The selected character anchors the preview. Selecting or moving another character
+- The selected character anchors the preview. Selecting another character
   cannot move an already-fired projectile's path.
 - Only the current team's selected character can fire. Teams alternate when the
   active attack's existing 0.7-second lifetime ends. One attack is active at a time.
-- Automatic demo retains alternating teams and a minimum 1.25-second cast interval.
-  It aims the existing line/sine/parabola patterns at surviving opponents by adding
-  a linear term. Displayed automatic coefficients are rounded to four decimal places.
-- Restart restores all six characters, health, selection, attacks, and turn state.
-  The current expression and automatic setting are retained.
+- New round restores all six characters and randomizes their spawns. The current
+  expression is retained. Previous iteration/debug views and automatic controls
+  have been removed from the website; turns are player-controlled.
 
 A character is eliminated at zero health or below z = -5. Eliminated cubes disappear,
 stop moving, and cannot be selected or hit. If the selected character is eliminated,
@@ -39,17 +37,26 @@ team is eliminated. Simultaneous team elimination is a draw.
 ## Arena coordinates and obstacles
 
 X points right, Y up, and Z is height toward the camera. The orthographic camera
-looks directly down -Z. Framing includes the entire 20-by-8-unit platform, with margins,
+looks directly down -Z. Framing includes the entire 28-by-16-unit platform, with margins,
 at both narrow and wide aspect ratios. The platform's top is z = 0.
 Characters are one-unit cubes, landing with their centres at z = 0.5.
 
-Each team spawns at x = -6 or +6, with y = -2, 0, and +2.
-Three orange obstacles use fixed dimensions and positions from src/physics.js.
-Spawn footprints are clear; horizontal firing lanes remain open.
+Spawn centres are in the left/right bands 7 <= |x| <= 12.5, with |y| <= 6.5.
+This leaves a 14-unit central buffer between spawn zones, at least 2.5 units
+between teammates, and a full cube footprint plus 0.5-unit obstacle clearance.
+Each character gets at most 50 placement attempts. If placement fails, the entire
+team uses its verified fallback slots: x = -10 or +10; y = -5, 0, +5.
+Replacing the whole team prevents fallback/random overlap.
+
+Twelve orange boxes form two open L-walls, staggered barriers, and two block
+clusters. The same OBSTACLES dimensions create each visible box and each collision
+rectangle: no encompassing rectangle fills the L notches or the 1.6-unit cluster
+gaps. The central horizontal corridor stays open. Obstacles are confined to the
+middle of the arena, away from both spawn bands; spawns cannot be enclosed.
 
 Character movement sweeps X then Y against the obstacle rectangles, expanded by the
 character's half-width. A crossing is clamped to the obstacle face, and that component
-of knockback velocity is stopped. This prevents large walking/knockback steps from
+of knockback velocity is stopped. This prevents large knockback steps from
 tunnelling through obstacles and permits simple sliding along their sides.
 Obstacles are XY barriers, with no climbing or jumping.
 
@@ -78,36 +85,50 @@ Trigonometry uses radians. Input is restricted to mathematical names and operato
 ln is natural logarithm, log is base 10. Chained powers should be parenthesized
 explicitly because the library's ^ operator is left-associative.
 
-Coordinates remain unscaled and unmirrored:
+Curves are automatically translated, never stretched or mirrored. For finite f(0):
 
-    worldX = characterX + localX
-    worldY = characterY + f(localX)
+    worldX = characterX + x
+    worldY = characterY + (f(x) - f(0))
     worldZ = 0.5
 
-Sampling now uses -24 <= localX <= 24, at 0.05-unit intervals, to cover the wider arena.
-Undefined/nonfinite values and far-offscreen |f(x)| > 1000 are omitted.
-The existing midpoint/jump checks separate discontinuous branches.
+For example, 6 becomes a horizontal shot, x+6 becomes a diagonal shot,
+e^x becomes e^x-1, and (x-1)^2+1 becomes (x-1)^2-1.
+The input keeps the original expression.
 
-The firing path starts at local x = 0. Blue follows increasing local x;
-Red follows decreasing local x. This reverses traversal, not the equation's shape.
-The preview shows exactly this outgoing portion of the first continuous branch.
-An undefined f(0), or no outgoing continuous segment, disables Fire with an error.
-The ball stops when that branch ends; it never teleports to another branch.
+If f(0) is undefined, scan the 0.05-unit samples from zero in the firing direction.
+Use the first finite point (a, f(a)) and translate both coordinates:
 
-If f(0) is nonzero, the ball makes a 0.12-second visual transition from the character
-to the first curve point. No connector is drawn, and enemies cannot take damage
-during that transition. Obstacles and map boundaries can still stop the launch.
-Firing copies the expression, origin, and exact preview points.
+    worldX = characterX + (x - a)
+    worldY = characterY + (f(x) - f(a))
+
+If that side has no finite samples, scan from the opposite domain edge in the same
+direction. This allows a valid branch on either side rather than rejecting it.
+Invalid syntax or no finite sampled launch point produces an equation error.
+
+Sampling uses -32 <= localX <= 32, at 0.05-unit intervals, to cover the wider arena.
+Undefined/nonfinite values and far-offscreen |f(x)-f(a)| > 1000 are omitted.
+The limit is applied after translation, so large constant offsets still work.
+Midpoint overshoots and flat-to-flat steps split poles and discontinuities;
+steep monotone sections such as the first segment of 1/x stay connected.
+
+Blue follows increasing original x; Red follows decreasing original x. This reverses
+traversal, not the curve's shape. The preview shows only the continuous outgoing
+branch from the launch anchor. A one-point branch can fire but immediately stops.
+The ball starts directly at the shooter; there is no launch transition or connector.
+Firing copies the expression, shooter position, and exact translated preview points.
+The fixed shot cannot follow later selection changes or knockback.
 
 ## Projectile movement and collisions
 
 The bright sphere uses an emissive material and a small transparent halo; no bloom
 or extra graphics library is used. The solid fired curve is only a visual guide.
 
-On the curve, the ball moves at 40 world units per second measured along the
+On the curve, the ball moves at 60 world units per second measured along the
 sampled polyline. Each update spends speed * elapsedTime along successive segments,
 including partial segments. Steep curves therefore do not make the ball move faster.
-The existing attack lifetime remains 0.7 second, including any launch transition.
+The speed is increased to cover the larger map; the existing attack lifetime
+remains 0.7 second. Curves are visually clipped
+to the platform rectangle, without changing the sampled firing path.
 
 Every travelled segment is swept for its earliest collision:
 
@@ -123,31 +144,61 @@ enemy. Teammates are ignored. Only arrival at an enemy removes 20 health and app
 one XY impulse. The projectile then stops, preventing repeated damage or knockback.
 A stopped ball remains visible until its original lifetime ends.
 
+## Shooter-relative Cartesian grid
+
+The selected shooter is always (0, 0). Grid lines are exactly one world/physics unit
+apart; axis numbers appear every two units, with +X right and +Y up.
+Both axes and their numbers move when the selected shooter changes or is knocked back.
+Enemy labels show (enemyX-shooterX, enemyY-shooterY), rounded to one decimal for
+readability; physics and equation samples retain full precision. Labels follow moving
+enemies and disappear on elimination. These coordinates are gameplay aiming aids,
+not the removed debug readouts.
+
+## Fullscreen interface and diagnostics
+
+The canvas fills the viewport with no page scrolling. Compact health and firing
+panels overlay it. A ResizeObserver watches both the viewport container and panels,
+including validation/winner text changes. The orthographic frustum is sized and
+shifted so the whole platform fits between the panels, even on portrait screens.
+Very narrow screens necessarily show a smaller arena; this is not a mobile-first
+touch game.
+
+Only gameplay information remains on the page. Spawn coordinates, selections,
+shots, impacts, eliminations, turns, and results are logged to the browser console
+once per event, not every frame. Invalid equations are reported in the controls;
+a rejected expression is also logged when the edit is committed.
+The engine's existing automatic simulation is retained for regression tests only,
+not exposed by a checkbox or URL.
+
 ## Verification and limitations
 
 Automated tests cover camera framing, all input examples, selected-character anchoring,
-immutable fired paths, turn restrictions, individual/team elimination, clear spawns,
-obstacle movement blocking, first-hit ordering, fast swept collisions, all four map
-edges, arc-length speed, harmless offset launches, branch stopping, and complete
-rounds at 30/60/144 rendering frames per second.
+immutable fired paths, turn restrictions, individual/team elimination, 1,000 seeded random spawn layouts, bounded fallback placement,
+obstacle movement blocking and open compound-shape gaps, first-hit ordering, fast swept collisions, all four map
+edges, arc-length speed, translated anchors, grid units and relative coordinates,
+undefined-zero fallback anchors, branch stopping, and complete
+fixed-corridor rounds at 30/60/144 rendering frames per second.
+These controlled combat fixtures do not prove that every random layout has a winning shot.
 
 Approximations remain deliberate: characters use circular projectile hit regions,
 obstacle corners use expanded rectangles, and obstacles have axis-separated movement
 resolution. Moving enemies are checked at each fixed physics step, not with a full
 continuous moving-body solver. Sampling cannot guarantee detection of every narrow
-discontinuity; steep continuous details may be omitted conservatively.
+discontinuity or accurately reproduce details smaller than the sampling interval.
+The first finite point near a singularity may produce a very steep translated shot.
 This demonstration is not balanced competitive gameplay.
 
 ## Files
 
 - src/equations.js: existing parser, sampling, and outgoing firing-path selection.
 - src/physics.js: arena, obstacle definitions, characters, motion, and impulses.
-- src/projectile.js: projectile movement, launch transition, and swept collisions.
-- src/combat.js: teams, selection, turns, eliminations, and automatic demo.
+- src/projectile.js: projectile movement and swept collisions.
+- src/grid.js: Cartesian grid positions and shooter-relative coordinate labels.
+- src/spawns.js: bounded random placement, spawn clearance, and safe fallback slots.
+- src/combat.js: teams, selection, turns, and eliminations.
 - src/scene.js: camera, six cubes, selection outline, obstacles, and glowing ball.
 - src/main.js: input, previews, team readout, and simulation loop.
-- index.html / style.css: existing page and controls.
+- index.html / style.css: fullscreen canvas and compact gameplay overlays.
 - tests/: Node's built-in test runner.
 
-The earlier ?iteration=1 and ?iteration=2 views remain available with the updated arena.
 Root-level physics.js and shapes.js are separate existing files, not used or modified here.

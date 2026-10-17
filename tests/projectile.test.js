@@ -35,19 +35,19 @@ test("a fast projectile damages only the first enemy, once, and ignores teammate
 });
 
 test("an obstacle blocks an enemy behind it, while a nearer enemy is hit first", () => {
-  let players = [blue(-4, 1), red(4, 1)];
+  let players = [blue(-7, 4), red(7, 4)];
   let attack = createAttack(0, players, parseEquation("0"), 0);
   updateProjectile(attack, players, 0.6);
   assert.equal(attack.reason, "Obstacle");
-  close(attack.position.x, -0.6 - PROJECTILE_RADIUS);
+  close(attack.position.x, -4 - PROJECTILE_RADIUS);
   assert.equal(players[1].health, 100);
 
-  players = [blue(-4, 1), red(-2, 1)];
+  players = [blue(-7, 4), red(-6, 4)];
   attack = createAttack(0, players, parseEquation("0"), 0);
   updateProjectile(attack, players, 0.6);
   assert.equal(attack.reason, "Enemy hit");
   assert.equal(players[1].health, 80);
-  assert.ok(attack.position.x < -2);
+  assert.ok(attack.position.x < -6);
 });
 
 test("all four map boundaries stop a swept shot before an outside target", () => {
@@ -69,55 +69,67 @@ test("all four map boundaries stop a swept shot before an outside target", () =>
 });
 
 test("speed is measured along a line and a parabola, rather than along X", () => {
-  let players = [blue(-6, -2)];
+  let players = [blue(-11, 0)];
   let attack = createAttack(0, players, parseEquation("0.1x"), 0);
   updateProjectile(attack, players, 0.1);
-  close(Math.hypot(attack.position.x + 6, attack.position.y + 2), PROJECTILE_SPEED * 0.1);
+  close(Math.hypot(attack.position.x + 11, attack.position.y), PROJECTILE_SPEED * 0.1);
 
-  players = [blue(-6, -2)];
+  players = [blue(-11, 0)];
   attack = createAttack(0, players, parseEquation("0.1x^2"), 0);
   updateProjectile(attack, players, 0.1);
-  const x = attack.position.x + 6;
+  const x = attack.position.x + 11;
   // Independent analytic arc length of y = 0.1x² from 0 to x.
   const length = 0.5 * x * Math.sqrt(1 + 0.04 * x * x) + Math.asinh(0.2 * x) / 0.4;
   close(length, PROJECTILE_SPEED * 0.1, 0.001);
 });
 
-test("an offset curve uses a harmless launch transition without a damaging connector", () => {
-  const players = [blue(-6, 0), red(-6, 1)];
-  const attack = createAttack(0, players, parseEquation("2"), 0);
-  assert.equal(attack.launchDuration, 0.12);
+test("a constant offset is anchored through the shooter with no launch delay or connector", () => {
+  const players = [blue(-6, 0), red(-6, 2), red(0, 0)];
+  const attack = createAttack(0, players, parseEquation("6"), 0);
+  assert.equal(attack.launchDuration, undefined);
   assert.deepEqual(attack.position, { x: -6, y: 0, z: 0.5 });
-  assert.deepEqual(attack.path[0], { x: -6, y: 2, z: 0.5 });
-  updateProjectile(attack, players, 0.06);
-  close(attack.position.y, 1);
+  assert.deepEqual(attack.path[0], attack.position);
+  updateProjectile(attack, players, 0.01);
+  close(attack.position.x, -6 + PROJECTILE_SPEED * 0.01);
+  close(attack.position.y, 0);
+  updateProjectile(attack, players, 0.3);
   assert.equal(players[1].health, 100);
-  updateProjectile(attack, players, 0.6);
-  assert.equal(players[1].health, 100);
+  assert.equal(players[2].health, 80);
 });
 
-test("a target at the offset curve start is hit only after the visual transition", () => {
-  const players = [blue(-6, 0), red(-6, 2)];
-  const attack = createAttack(0, players, parseEquation("2"), 0);
-  updateProjectile(attack, players, 0.1);
-  assert.equal(players[1].health, 100);
-  updateProjectile(attack, players, 0.03);
-  assert.equal(players[1].health, 80);
-});
-
-test("a harmless launch still stops at an obstacle or map edge", () => {
-  let players = [blue(0, -1), red(6, 0)];
-  let attack = createAttack(0, players, parseEquation("4"), 0);
-  updateProjectile(attack, players, 0.2);
-  assert.equal(attack.reason, "Obstacle");
-  assert.ok(players.every((player) => player.health === 100));
-  close(attack.position.y, 1 - 0.4 - PROJECTILE_RADIUS);
-
-  players = [blue(-6, 3.5), red(6, 0)];
-  attack = createAttack(0, players, parseEquation("2"), 0);
-  updateProjectile(attack, players, 0.2);
-  assert.equal(attack.reason, "Map boundary");
-  close(attack.position.y, ARENA.depth / 2 - PROJECTILE_RADIUS);
+test("every translated preview is the exact immutable path used by the projectile", () => {
+  for (const team of [0, 1]) {
+    for (const expression of ["6", "x+6", "e^x", "(x-1)^2+1", "1/x", "ln(x)"]) {
+      const players = [createPlayer("Shooter", team === 0 ? -11 : 11, 0, 0.5, team)];
+      const preview = buildPreview(expression, players[0].position, team === 0 ? 1 : -1);
+      assert.equal(preview.error, "");
+      const attack = createAttack(0, players, preview.equation, 0, preview);
+      assert.deepEqual(attack.path, preview.path);
+      assert.notEqual(attack.path, preview.path);
+      assert.deepEqual(attack.position, attack.path[0]);
+      const frozen = JSON.stringify(attack.path);
+      players[0].position.x += 0.5;
+      preview.path[0].y += 100;
+      assert.equal(JSON.stringify(attack.path), frozen);
+      updateProjectile(attack, players, 0.005);
+      // Locate the travelled distance independently on the saved preview polyline.
+      let remaining = PROJECTILE_SPEED * 0.005;
+      let expected = attack.path[0];
+      for (let i = 1; i < attack.path.length; i += 1) {
+        const a = attack.path[i - 1], b = attack.path[i];
+        const length = Math.hypot(b.x - a.x, b.y - a.y);
+        if (remaining <= length) {
+          expected = { x: a.x + (b.x - a.x) * remaining / length,
+            y: a.y + (b.y - a.y) * remaining / length };
+          break;
+        }
+        remaining -= length;
+        expected = b;
+      }
+      close(attack.position.x, expected.x);
+      close(attack.position.y, expected.y);
+    }
+  }
 });
 
 test("a discontinuity ends the first branch without teleporting to a later branch", () => {
@@ -132,9 +144,13 @@ test("a discontinuity ends the first branch without teleporting to a later branc
   assert.equal(players[1].health, 100);
 });
 
-test("undefined f(0) and a branch with no outgoing path reject firing clearly", () => {
-  assert.ok(buildPreview("1/x", { x: -6, y: 0 }, 1).error);
-  assert.ok(buildPreview("sqrt(x)", { x: 6, y: 0 }, -1).error);
+test("a one-point branch fires at the shooter and stops without teleporting", () => {
+  const players = [red()];
+  const preview = buildPreview("sqrt(x)", players[0].position, -1);
+  const attack = createAttack(0, players, preview.equation, 0, preview);
+  updateProjectile(attack, players, 0.1);
+  assert.equal(attack.reason, "End of continuous curve");
+  assert.deepEqual(attack.position, { x: 6, y: 0, z: 0.5 });
 });
 
 test("Red traverses decreasing local X without mirroring the equation", () => {
@@ -142,9 +158,9 @@ test("Red traverses decreasing local X without mirroring the equation", () => {
   const preview = buildPreview("0.1x+1", players[0].position, -1);
   const attack = createAttack(0, players, preview.equation, 0, preview);
   assert.equal(attack.path[0].x, 6);
-  assert.equal(attack.path[0].y, 1);
+  assert.equal(attack.path[0].y, 0);
   assert.ok(attack.path[1].x < 6);
-  for (const point of attack.path) close(point.y, 0.1 * (point.x - 6) + 1);
+  for (const point of attack.path) close(point.y, 0.1 * (point.x - 6));
 });
 
 test("eliminated or airborne targets are ignored, and lifetime remains bounded", () => {
@@ -155,4 +171,13 @@ test("eliminated or airborne targets are ignored, and lifetime remains bounded",
   updateProjectile(attack, players, 2);
   assert.equal(attack.age, ATTACK_DURATION);
   assert.ok(players.every((p) => p.health === 100));
+});
+
+
+test("visible block gaps and L-wall notches are not filled by compound colliders", () => {
+  for (const [start, end] of [
+    [{ x: 2.5, y: 4.5 }, { x: 6.5, y: 4.5 }],
+    [{ x: -2, y: 1 }, { x: -2, y: 4.5 }],
+    [{ x: -13, y: 0 }, { x: 13, y: 0 }],
+  ]) assert.equal(firstCollision(start, end, [blue(start.x, start.y)], 0), null);
 });

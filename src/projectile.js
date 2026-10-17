@@ -1,27 +1,23 @@
-import { COMBAT_Z, sampleEquation, getFiringPath } from "./equations.js";
+import { COMBAT_Z, buildTrajectory } from "./equations.js";
 import { ARENA, OBSTACLES, PLAYER_SIZE, applyKnockback } from "./physics.js";
 
 export const DAMAGE = 20;
 export const KNOCKBACK = 3.2;
 export const ATTACK_DURATION = 0.7;
-export const PROJECTILE_SPEED = 40;
+export const PROJECTILE_SPEED = 60;
 export const PROJECTILE_RADIUS = 0.12;
-const LAUNCH_DURATION = 0.12;
 
 export function createAttack(attackerIndex, players, equation, time, preview = null) {
   const attacker = players[attackerIndex];
-  const origin = preview ? preview.origin : attacker.position;
-  const sections = preview ? preview.sections : sampleEquation(equation, origin);
-  const sourcePath = preview?.path || getFiringPath(sections, origin, attacker.team === 0 ? 1 : -1);
-  const path = sourcePath.map((point) => ({ ...point }));
-  const offset = Math.hypot(path[0].x - origin.x, path[0].y - origin.y);
+  const trajectory = preview || buildTrajectory(equation, attacker.position, attacker.team === 0 ? 1 : -1);
+  const origin = trajectory.origin;
+  const path = trajectory.path.map((point) => ({ ...point }));
   return {
     attackerIndex, equation, path,
     origin: { x: origin.x, y: origin.y, z: COMBAT_Z },
     position: { x: origin.x, y: origin.y, z: COMBAT_Z },
     segment: 1,
     age: 0,
-    launchDuration: offset > 1e-8 ? LAUNCH_DURATION : 0,
     expiresAt: time + ATTACK_DURATION,
     didHit: false,
     stopped: false,
@@ -81,7 +77,7 @@ function boundaryHit(start, end) {
   return first;
 }
 
-export function firstCollision(start, end, players, attackerIndex, hitEnemies = true) {
+export function firstCollision(start, end, players, attackerIndex) {
   const boundary = boundaryHit(start, end);
   let first = boundary === null ? null : { t: boundary, reason: "Map boundary" };
   function consider(t, reason, playerIndex = null) {
@@ -91,7 +87,7 @@ export function firstCollision(start, end, players, attackerIndex, hitEnemies = 
     consider(segmentBoxHit(start, end, obstacle, PROJECTILE_RADIUS), "Obstacle");
   }
   players.forEach((player, index) => {
-    if (!hitEnemies || player.eliminated || player.team === players[attackerIndex].team) return;
+    if (player.eliminated || player.team === players[attackerIndex].team) return;
     if (Math.abs(player.position.z - COMBAT_Z) > PLAYER_SIZE / 2) return;
     consider(segmentCircleHit(start, end, player.position, PLAYER_SIZE / 2 + PROJECTILE_RADIUS),
       "Enemy hit", index);
@@ -99,9 +95,9 @@ export function firstCollision(start, end, players, attackerIndex, hitEnemies = 
   return first;
 }
 
-function travelSegment(attack, end, players, hitEnemies = true) {
+function travelSegment(attack, end, players) {
   const start = attack.position;
-  const collision = firstCollision(start, end, players, attack.attackerIndex, hitEnemies);
+  const collision = firstCollision(start, end, players, attack.attackerIndex);
   const t = collision ? collision.t : 1;
   attack.position = {
     x: start.x + (end.x - start.x) * t,
@@ -124,28 +120,9 @@ export function updateProjectile(attack, players, dt) {
   attack.age = Math.min(ATTACK_DURATION, attack.age + dt);
   if (attack.stopped) return;
 
-  if (attack.age < attack.launchDuration) {
-    const t = attack.age / attack.launchDuration;
-    const first = attack.path[0];
-    // This short transition is visual only: no damaging connector is created.
-    travelSegment(attack, {
-      x: attack.origin.x + (first.x - attack.origin.x) * t,
-      y: attack.origin.y + (first.y - attack.origin.y) * t,
-    }, players, false);
-    return;
-  }
-
-  if (before <= attack.launchDuration) {
-    if (attack.launchDuration > 0) {
-      travelSegment(attack, attack.path[0], players, false);
-      if (attack.stopped) return;
-    }
-    attack.position = { ...attack.path[0] };
-    travelSegment(attack, attack.position, players); // Also test a blocked curve start.
-  }
-  const seconds = Math.max(0, attack.age - attack.launchDuration) -
-    Math.max(0, before - attack.launchDuration);
-  let distance = seconds * PROJECTILE_SPEED;
+  // The translated path starts at the shooter: no launch connector or delay.
+  if (before === 0) travelSegment(attack, attack.position, players);
+  let distance = (attack.age - before) * PROJECTILE_SPEED;
 
   // Spend distance, not X increments, to maintain speed along curved segments.
   while (distance > 1e-10 && !attack.stopped) {

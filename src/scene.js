@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { ARENA, PLAYER_SIZE, OBSTACLES } from "./physics.js";
 import { PROJECTILE_RADIUS } from "./projectile.js";
+import { buildCartesianGrid, coordinateText } from "./grid.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -10,16 +11,21 @@ export function createCamera() {
   return camera;
 }
 
-export function frameCamera(camera, aspect) {
-  const halfHeight = Math.max(ARENA.depth / 2 + 2, (ARENA.halfWidth + 2) / aspect);
+export function frameCamera(camera, aspect, topInset = 0, bottomInset = 0) {
+  // Insets are fractions of viewport height occupied by the gameplay controls.
+  const usableHeight = Math.max(0.1, 1 - topInset - bottomInset);
+  const halfHeight = Math.max(
+    (ARENA.depth / 2 + 1) / usableHeight, (ARENA.halfWidth + 1) / aspect,
+  );
+  const shift = (topInset - bottomInset) * halfHeight;
   camera.left = -halfHeight * aspect;
   camera.right = halfHeight * aspect;
-  camera.top = halfHeight;
-  camera.bottom = -halfHeight;
+  camera.top = shift + halfHeight;
+  camera.bottom = shift - halfHeight;
   camera.updateProjectionMatrix();
 }
 
-export function createView(container, iteration) {
+export function createView(container, hud, controls) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x152032);
 
@@ -28,8 +34,15 @@ export function createView(container, iteration) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
+  renderer.localClippingEnabled = true;
+  const curveBounds = [
+    new THREE.Plane(new THREE.Vector3(1, 0, 0), ARENA.halfWidth),
+    new THREE.Plane(new THREE.Vector3(-1, 0, 0), ARENA.halfWidth),
+    new THREE.Plane(new THREE.Vector3(0, 1, 0), ARENA.depth / 2),
+    new THREE.Plane(new THREE.Vector3(0, -1, 0), ARENA.depth / 2),
+  ];
   renderer.domElement.tabIndex = 0;
-  renderer.domElement.setAttribute("aria-label", "Game movement area");
+  renderer.domElement.setAttribute("aria-label", "Select a character in the combat arena");
   container.prepend(renderer.domElement);
 
   const ambient = new THREE.HemisphereLight(0xe9f3ff, 0x344259, 2);
@@ -38,10 +51,10 @@ export function createView(container, iteration) {
   const light = new THREE.DirectionalLight(0xffffff, 2.5);
   light.position.set(-4, 8, 10);
   light.castShadow = true;
-  light.shadow.camera.left = -14;
-  light.shadow.camera.right = 14;
-  light.shadow.camera.top = 10;
-  light.shadow.camera.bottom = -10;
+  light.shadow.camera.left = -18;
+  light.shadow.camera.right = 18;
+  light.shadow.camera.top = 12;
+  light.shadow.camera.bottom = -12;
   light.shadow.mapSize.set(1024, 1024);
   scene.add(light);
 
@@ -78,12 +91,85 @@ export function createView(container, iteration) {
     scene.add(mesh);
   });
 
-  // The rendering iteration shows an XY grid to explain equation coordinates.
-  if (iteration === 1) {
-    const grid = new THREE.GridHelper(24, 24, 0x3c516e, 0x26384f);
-    grid.rotation.x = Math.PI / 2;
-    grid.position.z = 0.02;
-    scene.add(grid);
+
+  const gridLines = new THREE.LineSegments(
+    new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0xa8bbd1, transparent: true, opacity: 0.22 }),
+  );
+  const gridAxes = new THREE.LineSegments(
+    new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0xe7eef8, transparent: true, opacity: 0.8 }),
+  );
+  scene.add(gridLines, gridAxes);
+  const labels = document.createElement("div");
+  labels.className = "cartesian-labels";
+  container.append(labels);
+  const axisLabels = document.createElement("div");
+  labels.append(axisLabels);
+  const characterLabels = Array.from({ length: 6 }, () => {
+    const label = document.createElement("div");
+    label.className = "coordinate-label";
+    labels.append(label);
+    return label;
+  });
+  let gridKey = "";
+  let ticks = [];
+
+  function positionLabel(label, point) {
+    const projected = new THREE.Vector3(point.x, point.y, 0).project(camera);
+    const x = (projected.x + 1) * container.clientWidth / 2;
+    label.style.left = label.classList.contains("coordinate-label")
+      ? Math.max(68, Math.min(container.clientWidth - 68, x)) + "px" : x + "px";
+    label.style.top = (1 - projected.y) * container.clientHeight / 2 + "px";
+  }
+
+  function drawGrid(players, selectedIndex) {
+    const shooter = players[selectedIndex];
+    const visible = Boolean(shooter && !shooter.eliminated);
+    gridLines.visible = gridAxes.visible = visible;
+    labels.hidden = !visible;
+    if (!visible) return;
+    const origin = shooter.position;
+    const key = origin.x + "," + origin.y;
+    if (key !== gridKey) {
+      gridKey = key;
+      const data = buildCartesianGrid(origin);
+      for (const [mesh, lines] of [[gridLines, data.lines], [gridAxes, data.axes]]) {
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.BufferGeometry().setFromPoints(lines.flatMap((line) => [
+          new THREE.Vector3(line.x1, line.y1, 0.02), new THREE.Vector3(line.x2, line.y2, 0.02),
+        ]));
+      }
+      axisLabels.replaceChildren();
+      ticks = data.labels.map((tick) => {
+        const label = document.createElement("span");
+        label.className = "axis-label " + tick.kind;
+        label.textContent = tick.text;
+        label.setAttribute("aria-hidden", "true");
+        axisLabels.append(label);
+        return { ...tick, label };
+      });
+    }
+    ticks.forEach((tick) => positionLabel(tick.label, tick));
+    const placedLabels = [];
+    characterLabels.forEach((label, index) => {
+      const player = players[index];
+      label.hidden = player.eliminated || (index !== selectedIndex && player.team === shooter.team);
+      if (label.hidden) return;
+      label.textContent = player.name + " " + coordinateText(player.position, origin);
+      label.className = "coordinate-label " + (index === selectedIndex ? "shooter-coordinate" : "enemy-coordinate");
+      positionLabel(label, player.position);
+      // Move only the text upward if nearby characters' labels would cover each other.
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const rect = label.getBoundingClientRect();
+        const overlaps = placedLabels.some((other) =>
+          rect.left < other.right + 3 && rect.right + 3 > other.left &&
+          rect.top < other.bottom + 3 && rect.bottom + 3 > other.top);
+        if (!overlaps) break;
+        label.style.top = Number.parseFloat(label.style.top) - rect.height - 3 + "px";
+      }
+      placedLabels.push(label.getBoundingClientRect());
+    });
   }
 
   const cubeGeometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
@@ -152,7 +238,7 @@ export function createView(container, iteration) {
       raycaster.setFromCamera(point, camera);
       const hit = raycaster.intersectObjects(playerMeshes.filter((mesh) => mesh.visible), false)[0];
       if (hit) select(hit.object.userData.playerIndex);
-      renderer.domElement.focus();
+      renderer.domElement.focus({ preventScroll: true });
     });
   }
 
@@ -168,6 +254,8 @@ export function createView(container, iteration) {
           transparent: true, opacity: 0.6, depthTest: false,
         })
         : new THREE.LineBasicMaterial({ color, depthTest: false });
+      // Only the part inside the map is visible; sampling and firing share the same path.
+      material.clippingPlanes = curveBounds;
       const line = new THREE.Line(geometry, material);
       line.computeLineDistances();
       line.renderOrder = preview ? 1 : 2;
@@ -189,16 +277,18 @@ export function createView(container, iteration) {
     const width = container.clientWidth;
     const height = container.clientHeight;
     const aspect = width / height;
-    frameCamera(camera, aspect);
+    frameCamera(camera, aspect, (hud.offsetHeight + 24) / height, (controls.offsetHeight + 24) / height);
     renderer.setSize(width, height);
   }
 
-  new ResizeObserver(resize).observe(container);
+  const observer = new ResizeObserver(resize);
+  [container, hud, controls].forEach((element) => observer.observe(element));
   resize();
 
   return {
     canvas: renderer.domElement,
     drawPlayers,
+    drawGrid,
     drawProjectile,
     onCharacterClick,
     drawCurve,

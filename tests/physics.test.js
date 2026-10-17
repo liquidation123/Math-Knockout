@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  ARENA, OBSTACLES, FIXED_STEP, MOVE_SPEED, createPlayer, updatePlayer,
+  ARENA, OBSTACLES, FIXED_STEP, createPlayer, updatePlayer,
   applyImpulse, applyKnockback, takeFixedSteps,
 } from "../src/physics.js";
 
@@ -78,22 +78,21 @@ test("ground friction preserves the XY direction and does not reverse tiny veloc
   close(player.velocity.y, 0);
 });
 
-test("walking moves along both screen axes with equal cardinal and diagonal speed", () => {
+test("direct movement arguments have no effect; only velocity moves a character", () => {
   for (const movement of [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: -1 }]) {
-    const player = createPlayer("Blue", 0, 0, 0.5);
-    updatePlayer(player, FIXED_STEP, movement);
-    close(Math.hypot(player.position.x, player.position.y), MOVE_SPEED * FIXED_STEP);
-    assert.equal(player.position.z, 0.5);
+    const player = createPlayer("Blue", -10, 0, 0.5);
+    for (let i = 0; i < 120; i += 1) updatePlayer(player, FIXED_STEP, movement);
+    assert.deepEqual(player.position, { x: -10, y: 0, z: 0.5 });
   }
 });
 
-test("XY knockback and walking give identical physics at 30/60/144 FPS", () => {
+test("XY knockback gives identical physics at 30/60/144 FPS", () => {
   function simulate(fps) {
     const player = createPlayer("Blue", 0, 0);
     const clock = { accumulator: 0 };
     applyImpulse(player, { x: 1, y: 0.5 });
     for (let frame = 0; frame < fps * 2; frame += 1) {
-      takeFixedSteps(clock, 1 / fps, (dt) => updatePlayer(player, dt, { x: 1, y: 0.2 }));
+      takeFixedSteps(clock, 1 / fps, (dt) => updatePlayer(player, dt));
     }
     return player;
   }
@@ -101,20 +100,40 @@ test("XY knockback and walking give identical physics at 30/60/144 FPS", () => {
   assert.deepEqual(simulate(144), simulate(60));
 });
 
-test("large movement steps cannot pass through an obstacle from any axis direction", () => {
-  for (const obstacle of OBSTACLES) {
+test("large knockback steps cannot cross any solid component", () => {
+  for (const box of OBSTACLES) {
     for (const axis of ["x", "y"]) {
       for (const direction of [-1, 1]) {
-        const half = (axis === "x" ? obstacle.width : obstacle.depth) / 2 + 0.5;
-        const player = createPlayer("Blue", obstacle.x, obstacle.y, 0.5);
-        player.position[axis] = obstacle[axis] - direction * (half + 1);
-        player.velocity[axis] = direction * 1000;
+        const half = (axis === "x" ? box.width : box.depth) / 2 + 0.5;
+        const other = axis === "x" ? "y" : "x";
+        const player = createPlayer("Blue", box.x, box.y, 0.5);
+        // Start outside the entire compound layout, then sweep toward this component.
+        player.position[axis] = -direction * 12;
+        const start = player.position[axis];
+        const expected = OBSTACLES.filter((part) =>
+          Math.abs(player.position[other] - part[other]) <
+            (other === "x" ? part.width : part.depth) / 2 + 0.5,
+        ).map((part) => part[axis] - direction * ((axis === "x" ? part.width : part.depth) / 2 + 0.5));
+        const firstFace = direction > 0 ? Math.min(...expected) : Math.max(...expected);
+        player.velocity[axis] = direction * 4000;
         updatePlayer(player, FIXED_STEP);
-        close(player.position[axis], obstacle[axis] - direction * half);
+        close(player.position[axis], firstFace);
         assert.equal(player.velocity[axis], 0);
+        assert.ok(direction * (player.position[axis] - start) < direction * (box[axis] + direction * half - start));
       }
     }
   }
+});
+
+test("characters slide through cluster gaps and the open notch of an L-wall", () => {
+  const gap = createPlayer("Blue", 2.5, 4.5, 0.5);
+  gap.velocity.x = 10;
+  updatePlayer(gap, 0.4);
+  close(gap.position.x, 6.5);
+  const notch = createPlayer("Blue", -2, 1, 0.5);
+  notch.velocity.y = 10;
+  updatePlayer(notch, 0.3);
+  close(notch.position.y, 4);
 });
 
 test("an eliminated character no longer moves or falls", () => {
