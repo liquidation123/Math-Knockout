@@ -3,8 +3,9 @@ import { ARENA, OBSTACLES, PLAYER_SIZE, applyKnockback } from "./physics.js";
 
 export const DAMAGE = 20;
 export const KNOCKBACK = 3.2;
+// Keep the impact visible briefly; flight itself has no time limit.
 export const ATTACK_DURATION = 0.7;
-export const PROJECTILE_SPEED = 60;
+export const PROJECTILE_SPEED = 10;
 export const PROJECTILE_RADIUS = 0.12;
 
 export function createAttack(attackerIndex, players, equation, time, preview = null) {
@@ -18,7 +19,7 @@ export function createAttack(attackerIndex, players, equation, time, preview = n
     position: { x: origin.x, y: origin.y, z: COMBAT_Z },
     segment: 1,
     age: 0,
-    expiresAt: time + ATTACK_DURATION,
+    stoppedAt: null,
     didHit: false,
     stopped: false,
     reason: "",
@@ -119,7 +120,7 @@ function travelSegment(attack, end, players) {
 
 export function updateProjectile(attack, players, dt) {
   const before = attack.age;
-  attack.age = Math.min(ATTACK_DURATION, attack.age + dt);
+  attack.age += dt;
   if (attack.stopped) return;
 
   // The translated path starts at the shooter: no launch connector or delay.
@@ -146,8 +147,5 @@ export function updateProjectile(attack, players, dt) {
     distance -= used;
     if (used >= length - 1e-10) attack.segment += 1;
   }
-  if (attack.age >= ATTACK_DURATION && !attack.stopped) {
-    attack.stopped = true;
-    attack.reason = "Attack expired";
-  }
+  if (attack.stopped) attack.stoppedAt = attack.age;
 }
