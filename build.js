@@ -1,7 +1,10 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { duelSocketUrl } from "./src/duel-connection.js";
 
 const root = new URL("./", import.meta.url);
 const output = new URL("./dist/", root);
+const bumpServerUrl = process.env.BUMP_SERVER_URL?.trim() || "";
+if (bumpServerUrl) duelSocketUrl("https://example.com/bump.html?room=build-check", bumpServerUrl);
 
 // Rebuild only the generated public folder. The local development server is unchanged.
 await rm(output, { recursive: true, force: true });
@@ -38,5 +41,10 @@ for (const name of ["play.html", "bump.html"]) {
 const parser = new URL("src/math-parser-browser.js", output);
 await writeFile(parser, (await readFile(parser, "utf8"))
   .replace("../node_modules/math-expression-evaluator/dist/browser/", "../vendor/math-expression-evaluator/"));
+
+const connection = new URL("src/duel-connection.js", output);
+await writeFile(connection, (await readFile(connection, "utf8"))
+  .replace('export const BUMP_SERVER_URL = "";', "export const BUMP_SERVER_URL = " + JSON.stringify(bumpServerUrl) + ";"));
+if (!bumpServerUrl) console.warn("Bump Duel: BUMP_SERVER_URL is unset. This static build needs a live multiplayer server; npm start on your computer does not start one on Vercel.");
 
 console.log("Built Out-Mathed in dist/ (homepage, character creator, arena, and browser libraries).");

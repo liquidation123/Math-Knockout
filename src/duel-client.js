@@ -3,6 +3,7 @@ import { travelPath } from "./duel.js";
 import { insideArena } from "./physics.js";
 import { createView } from "./scene.js";
 import { readSavedMask } from "./saved-character.js";
+import { duelSocketUrl } from "./duel-connection.js";
 
 const $ = (selector) => document.querySelector(selector);
 const room = new URL(location.href);
@@ -13,6 +14,7 @@ if (!room.searchParams.has("room")) {
 const view = createView($("#arena"), $("#hud"), $("#controls"), "bump");
 let mountainReady = false;
 let startupFailed = false, leaving = false;
+let socket;
 let state, previewLine, preview, lastKey = "", summitView = false;
 function updateLoading() {
   // A loaded model alone is not enough: the server must assign a real side.
@@ -30,7 +32,7 @@ function showConnectionError(message, error) {
   $("#error").textContent = message;
   for (const id of ["#equation", "#lock", "#reset", "#view"]) $(id).disabled = true;
   console.error("Bump Duel:", message, error || "");
-  socket.close();
+  socket?.close();
 }
 view.ready.then(() => {
   mountainReady = true;
@@ -40,10 +42,17 @@ view.ready.then(() => {
   showConnectionError("The mountain could not load. Check the connection, then retry.", error);
 });
 view.setViewMode("character");
-const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/?room=${room.searchParams.get("room")}`);
-const connectionHelp = "Cannot reach the Bump Duel server. Stop the old server and run npm start again; open the address it prints, then retry. Bump Duel needs a Node/WebSocket server, not static hosting.";
+const localPage = ["localhost", "127.0.0.1", "[::1]"].includes(room.hostname);
+const connectionHelp = localPage
+  ? "Cannot reach the Bump Duel server. Stop the old server and run npm start again; open the address it prints, then retry."
+  : "Online Bump Duel is unavailable. Please retry later or use Change mode to play Projectile Duel.";
+try {
+  socket = new WebSocket(duelSocketUrl(room.href));
+} catch (error) {
+  showConnectionError(connectionHelp, error);
+}
 
-socket.addEventListener("open", async () => {
+socket?.addEventListener("open", async () => {
   try {
     const mask = await readSavedMask();
     if (mask && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "shape", mask }));
@@ -88,7 +97,7 @@ function updateScreen() {
   if (phase === "finished") $("#error").textContent = state.winner === "Draw" ? "Both players fell." : `${state.winner} stayed on the summit.`;
 }
 
-socket.addEventListener("message", ({ data }) => {
+socket?.addEventListener("message", ({ data }) => {
   if (startupFailed || leaving) return;
   let message;
   try { message = JSON.parse(data); }
@@ -119,9 +128,9 @@ socket.addEventListener("message", ({ data }) => {
   if (state.phase === "running" && previewLine) { view.removeCurve(previewLine); previewLine = null; }
   updateScreen();
 });
-socket.addEventListener("error", (error) => showConnectionError(connectionHelp, error));
-socket.addEventListener("close", (event) => showConnectionError(event.reason || connectionHelp));
-window.addEventListener("pagehide", () => { leaving = true; document.exitPointerLock?.(); socket.close(); });
+socket?.addEventListener("error", (error) => showConnectionError(connectionHelp, error));
+socket?.addEventListener("close", (event) => showConnectionError(event.reason || connectionHelp));
+window.addEventListener("pagehide", () => { leaving = true; document.exitPointerLock?.(); socket?.close(); });
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 $("#equation").addEventListener("input", drawPreview);
 $("#form").addEventListener("submit", (event) => {

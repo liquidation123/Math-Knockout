@@ -66,6 +66,29 @@ with `npm start`, open its printed address, and use **Retry**.
 
 Open the printed address (normally `http://127.0.0.1:5173`) and choose a mode. For Bump Duel, copy the invite link into another tab or device for Red. A second device needs a reachable Node server address; localhost refers only to its own computer. Run `npm test` for the Node tests. The server binds to localhost by default; set `HOST=0.0.0.0` and `PORT` for a Node host that accepts external connections. The Vercel static build includes the arena assets, but live rooms need a persistent Node/WebSocket host; the current Vercel deployment cannot run the duel server.
 
+## Online Bump Duel deployment
+
+The current Vercel configuration publishes only `dist/`; it does not run
+`server.js`. Restarting a local server cannot fix a connection to `wss://math-knockout.vercel.app/`.
+
+For the existing in-memory room implementation:
+
+1. Deploy this repository as one persistent Node service. Install with `npm ci`,
+   start with `npm start`, and set `HOST=0.0.0.0`. Let the host supply `PORT`.
+   Keep one instance: rooms currently live in that process's memory.
+2. Get its public HTTPS address and verify two clients can join the same room.
+3. In the Vercel project's environment variables, set `BUMP_SERVER_URL` to that
+   address (or its `wss://` endpoint), then rebuild and redeploy the static site.
+   This URL is public browser configuration, not a secret.
+4. Open the redeployed Bump Duel page and share its invite link. Both browsers
+   retain the same room ID and connect to the configured server.
+
+Local `npm start` still uses the current host and port without configuration.
+An HTTPS page requires a secure `wss://` backend; a localhost server is not a
+public backend. Vercel also offers WebSocket Functions, but adopting them here
+requires a function endpoint and shared room state across instances; this static
+build does not implement that architecture.
+
 ## Bump Duel rules
 
 - The Blender mountain and physics both use the same 28-by-16-unit rounded summit. Going below `z = -5` eliminates a player.

@@ -5,11 +5,12 @@ import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
 import { createDuel, travelPath } from "../src/duel.js";
 import { insideArena } from "../src/physics.js";
+import { duelSocketUrl } from "../src/duel-connection.js";
 
 // Run the real client with a fake DOM/socket, without needing WebGL in Node.
 const source = (await readFile(new URL("../src/duel-client.js", import.meta.url), "utf8"))
   .replace(/^import .+;\n/gm, "");
-function setup() {
+function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUrl = "" } = {}) {
   const nodes = new Map();
   const element = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
@@ -30,17 +31,17 @@ function setup() {
     readyState = 1;
     handlers = {};
     sent = [];
-    constructor() { socket = this; }
+    constructor(url) { socket = this; this.url = url; }
     addEventListener(name, handler) { this.handlers[name] = handler; }
     emit(name, event = {}) { this.handlers[name]?.(event); }
     send(data) { this.sent.push(JSON.parse(data)); }
     close() { this.readyState = 3; this.emit("close"); }
   }
   runInNewContext(source, {
-    URL, location: { href: "http://localhost/bump.html?room=test-room", protocol: "http:", host: "localhost" },
+    URL, location: new URL(pageUrl),
     document: { querySelector: element }, window: { addEventListener(name, handler) { windowEvents[name] = handler; } },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
-    buildPreview, travelPath, insideArena, requestAnimationFrame() {},
+    buildPreview, travelPath, insideArena, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame() {},
     console: { error: (...args) => errors.push(args) },
   });
   const message = (data) => socket.emit("message", { data: JSON.stringify(data) });
@@ -120,4 +121,21 @@ test("leaving Bump Duel closes the socket without showing a spurious startup fai
   ui.windowEvents.pagehide();
   assert.equal(ui.socket.readyState, 3);
   assert.equal(ui.errors.length, 0);
+});
+
+test("a deployed page connects to its configured backend and preserves the invite room", () => {
+  const ui = setup({ pageUrl: "https://math-knockout.vercel.app/bump.html?room=77164621", serverUrl: "https://duel.example.com" });
+  assert.equal(ui.socket.url, "wss://duel.example.com/?room=77164621");
+  ui.socket.emit("error");
+  assert.match(ui.element("#loading-message").textContent, /Online Bump Duel/);
+  assert.doesNotMatch(ui.element("#loading-message").textContent, /npm start|old server/);
+});
+
+test("insecure deployment configuration fails with an error instead of crashing startup", () => {
+  const ui = setup({ pageUrl: "https://math-knockout.vercel.app/bump.html?room=77164621", serverUrl: "ws://duel.example.com" });
+  assert.equal(ui.socket, undefined);
+  assert.equal(ui.element("#retry").hidden, false);
+  assert.equal(ui.element("#lock").disabled, true);
+  assert.match(ui.element("#loading-message").textContent, /Online Bump Duel/);
+  assert.equal(ui.errors.length, 1);
 });
