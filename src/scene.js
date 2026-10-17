@@ -42,6 +42,31 @@ export function frameCamera(camera, aspect, topInset = 0, bottomInset = 0) {
   camera.updateProjectionMatrix();
 }
 
+function starterMask(index, mode) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128; canvas.height = 80;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "white";
+  const red = index >= (mode === "bump" ? 1 : 3);
+  // Simple, distinct silhouettes for players who have not drawn a character.
+  ctx.fillRect(48, 26, 32, 30);
+  ctx.fillRect(42, 32, 7, 17); ctx.fillRect(79, 32, 7, 17);
+  ctx.fillRect(51, 55, 9, 18); ctx.fillRect(68, 55, 9, 18);
+  if (red) {
+    ctx.beginPath();
+    ctx.moveTo(48, 29); ctx.lineTo(42, 5); ctx.lineTo(60, 20);
+    ctx.lineTo(68, 20); ctx.lineTo(86, 5); ctx.lineTo(80, 29);
+    ctx.closePath(); ctx.fill();
+    ctx.fillRect(48, 22, 32, 15);
+  } else {
+    ctx.fillRect(49, 12, 30, 19);
+    ctx.fillRect(57, 4, 14, 9);
+    ctx.fillRect(54, 29, 6, 7); ctx.fillRect(68, 29, 6, 7);
+  }
+  const pixels = ctx.getImageData(0, 0, 128, 80).data;
+  return Array.from({ length: 10240 }, (_, i) => pixels[i * 4 + 3] ? "1" : "0").join("");
+}
+
 export function createView(container, hud, controls, mode = "projectile") {
   const scene = new THREE.Scene();
 
@@ -116,7 +141,8 @@ export function createView(container, hud, controls, mode = "projectile") {
     const x = (projected.x + 1) * container.clientWidth / 2;
     label.style.left = label.classList.contains("coordinate-label")
       ? Math.max(68, Math.min(container.clientWidth - 68, x)) + "px" : x + "px";
-    label.style.top = (1 - projected.y) * container.clientHeight / 2 + "px";
+    label.style.top = (1 - projected.y) * container.clientHeight / 2 -
+      (label.classList.contains("coordinate-label") ? 24 : 0) + "px";
   }
 
   function drawGrid(players, selectedIndex) {
@@ -177,15 +203,8 @@ export function createView(container, hud, controls, mode = "projectile") {
       cubeGeometry,
       new THREE.MeshStandardMaterial({ color, roughness: 0.6 }),
     );
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.userData.playerIndex = index;
-    const outline = new THREE.LineSegments(
-      new THREE.EdgesGeometry(cubeGeometry),
-      new THREE.LineBasicMaterial({ color: 0xffef8b, depthTest: false }),
-    );
-    outline.scale.setScalar(1.2);
-    outline.renderOrder = 3;
-    mesh.add(outline);
     scene.add(mesh);
     return mesh;
   });
@@ -228,9 +247,10 @@ export function createView(container, hud, controls, mode = "projectile") {
       const position = player.position;
       mesh.position.set(position.x, position.y, position.z);
       mesh.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
-      mesh.children[0].visible = index === selectedIndex && !mesh.userData.drawing;
-      if (mesh.userData.drawing) mesh.userData.drawing.userData.selection.visible = index === selectedIndex;
-      if (mesh.userData.drawing) mesh.userData.tilt = -player.velocity.x * 0.08;
+      if (mesh.userData.drawing) {
+        mesh.userData.drawing.scale.setScalar(index === selectedIndex ? 1.12 : 1);
+        mesh.userData.tilt = -player.velocity.x * 0.08;
+      }
     });
   }
 
@@ -246,51 +266,44 @@ export function createView(container, hud, controls, mode = "projectile") {
       });
       mesh.userData.drawing = null;
     }
-    mesh.material.transparent = false;
-    mesh.material.opacity = 1;
-    mesh.material.depthWrite = true;
-    if (!mask?.includes("1")) return;
+    mask = mask?.includes("1") ? mask : starterMask(index, mode);
     const occupied = [];
     for (let i = 0; i < mask.length; i++) if (mask[i] === "1") occupied.push(i);
-    const left = Math.min(...occupied.map((i) => i % 128));
-    const right = Math.max(...occupied.map((i) => i % 128));
-    const top = Math.min(...occupied.map((i) => Math.floor(i / 128)));
-    const bottom = Math.max(...occupied.map((i) => Math.floor(i / 128)));
+    const left = Math.max(0, Math.min(...occupied.map((i) => i % 128)) - 2);
+    const right = Math.min(127, Math.max(...occupied.map((i) => i % 128)) + 2);
+    const top = Math.max(0, Math.min(...occupied.map((i) => Math.floor(i / 128))) - 2);
+    const bottom = Math.min(79, Math.max(...occupied.map((i) => Math.floor(i / 128))) + 2);
     const width = right - left + 1, height = bottom - top + 1;
     const canvas = document.createElement("canvas");
     canvas.width = width; canvas.height = height;
     const context = canvas.getContext("2d");
     const pixels = context.createImageData(width, height);
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-      const visible = mask[(y + top) * 128 + x + left] === "1";
-      pixels.data.set([40, 49, 63, visible ? 255 : 0], (y * width + x) * 4);
+      const visible = [-2, -1, 0, 1, 2].some((dy) =>
+        [-2, -1, 0, 1, 2].some((dx) =>
+          x + left + dx >= 0 && x + left + dx < 128 &&
+          y + top + dy >= 0 && y + top + dy < 80 &&
+          mask[(y + top + dy) * 128 + x + left + dx] === "1"));
+      const color = index < (mode === "bump" ? 1 : 3) ? [45, 131, 218] : [217, 79, 105];
+      pixels.data.set([...color, visible ? 255 : 0], (y * width + x) * 4);
     }
     context.putImageData(pixels, 0, 0);
     const texture = new THREE.CanvasTexture(canvas);
-    const color = index < (mode === "bump" ? 1 : 3) ? 0x76b7ff : 0xff8c99;
+    texture.magFilter = THREE.NearestFilter;
     const drawing = new THREE.Group();
-    const badge = new THREE.Mesh(new THREE.CircleGeometry(0.72, 40),
-      new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
-    const face = new THREE.Mesh(new THREE.CircleGeometry(0.59, 40),
-      new THREE.MeshBasicMaterial({ color: 0xfff8e7, side: THREE.DoubleSide }));
-    face.position.z = 0.01;
-    const selection = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.83, 40),
-      new THREE.MeshBasicMaterial({ color: 0xffef8b, side: THREE.DoubleSide, depthTest: false }));
-    selection.position.z = 0.03;
-    selection.visible = false;
     const aspect = width / height;
-    const art = new THREE.Mesh(new THREE.PlaneGeometry(1.02 * Math.min(aspect, 1), 1.02 / Math.max(aspect, 1)),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
-    art.position.z = 0.02;
-    drawing.add(badge, face, art, selection);
-    drawing.userData.selection = selection;
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(2.4 * Math.min(aspect, 1), 2.4 / Math.max(aspect, 1)),
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
+    drawing.add(art);
     mesh.add(drawing);
     mesh.userData.drawing = drawing;
-    // Keep the original cube as the click target and physical proxy, while showing the sketch.
+    // The transparent proxy preserves click selection and the existing physics hitbox.
     mesh.material.transparent = true;
     mesh.material.opacity = 0;
     mesh.material.depthWrite = false;
   }
+
+  playerMeshes.forEach((_, index) => setPlayerShape(index, null));
 
   function drawProjectile(attack) {
     projectile.visible = Boolean(attack);
