@@ -119,3 +119,5 @@ summary { cursor: pointer; }
   font-size: 0.78rem;
   color: #dbe7f7;
 }
+.character-note { margin: 0.25rem 0 0.6rem; font-size: 0.82rem; color: #d4e2f2; }
+.character-note a { color: #9bd5ff; font-weight: 700; }
