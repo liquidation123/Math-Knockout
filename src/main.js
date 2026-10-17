@@ -1,3 +1,4 @@
+import { createVictoryScreen } from "./victory.js";
 import { buildPreview } from "./equations.js";
 import { createView } from "./scene.js";
 import { takeFixedSteps } from "./physics.js";
@@ -13,6 +14,19 @@ const errorLabel = document.querySelector("#equation-error");
 const povToggle = document.querySelector("#projectile-pov");
 const forceSlider = document.querySelector("#force");
 const forceValue = document.querySelector("#force-value");
+// Add the result controls here so play.html stays identical to main.
+const resultView = document.createElement("label");
+resultView.className = "result-view";
+resultView.innerHTML = 'View result as <select id="result-perspective">' +
+  '<option value="">Spectator</option><option value="Blue">Blue</option><option value="Red">Red</option></select>';
+document.querySelector("#controls").insertBefore(resultView, status);
+const resultPerspective = resultView.querySelector("select");
+const teamParam = new URLSearchParams(location.search).get("team");
+resultPerspective.value = TEAM_NAMES.find((name) => name.toLowerCase() === teamParam?.toLowerCase()) || "";
+const victory = createVictoryScreen(() => {
+  resetRound();
+  expression.focus();
+}, () => resultPerspective.value || null);
 let round;
 let clock;
 let previousTime;
@@ -38,6 +52,7 @@ function resetRound() {
   previewCurve = null;
   previewKey = "";
   document.querySelector("#result").hidden = true;
+  victory.hide();
   console.info("New round", round.players.map((player) => ({
     name: player.name, x: player.position.x, y: player.position.y,
   })));
@@ -143,12 +158,7 @@ function updateReadout() {
   fire.disabled = Boolean(!preview || preview.error || round.result || round.attack ||
     selected.eliminated || Math.abs(selected.position.z - 0.5) > 0.05);
   if (status.textContent !== round.message) status.textContent = round.message;
-  if (round.result) {
-    document.querySelector("#result").hidden = false;
-    document.querySelector("#winner").textContent =
-      round.result.winner === "Draw" ? "Draw" : round.result.winner + " wins";
-    document.querySelector("#finish-reason").textContent = round.result.reason;
-  }
+  if (round.result) victory.show(round);
 }
 
 function drawAttack() {

@@ -1,0 +1,104 @@
+/* Scoped to the result screen; no changes to the arena or homepage styles. */
+.result-view { display: inline-flex; align-items: center; gap: 6px; margin-left: 14px; color: #dbe7f7; font-size: 12px; }
+.result-view select { padding: 3px 5px; border: 1px solid #879bb7; border-radius: 4px; background: #172438; color: #edf2f8; font: inherit; }
+.result-view select:focus-visible { outline: 2px solid #76b7ff; outline-offset: 2px; }
+.victory {
+  --team: #05629b;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 28px 20px;
+  overflow: auto;
+  border: 0;
+  color: #123c59;
+  color-scheme: light;
+  background: linear-gradient(#a5b2b947, #b8beb447), linear-gradient(#0867b43b, #0867b400 65%), url('/assets/hero-landscape.jpg') center / cover #1686d8;
+  font-family: ui-rounded, 'Arial Rounded MT Bold', 'Trebuchet MS', system-ui, sans-serif;
+  text-align: center;
+}
+.victory, .victory *, .victory *::before { box-sizing: border-box; }
+.victory::backdrop { background: #1686d8; }
+.victory[data-team="red"] { --team: #a52844; }
+.victory[data-team="draw"] { --team: #654093; }
+.victory-content { display: flex; flex-direction: column; align-items: center; min-height: 100%; max-width: 760px; margin: auto; }
+.victory-brand { color: #fff3d9; font-size: 25px; font-weight: 1000; letter-spacing: -.07em; text-decoration: none; -webkit-text-stroke: 3px #123c59; paint-order: stroke fill; }
+.victory-kicker { margin: 30px 0 12px; color: white; font-size: 11px; font-weight: 900; letter-spacing: .3em; }
+.victory-medal { width: 112px; height: 112px; border-radius: 50%; background: #e7faffb3; box-shadow: 0 0 0 9px #ffffff24, 0 0 60px #fff6bc80; animation: victory-arrive .5s ease-out both; }
+.victory-medal svg { width: 100%; height: 100%; }
+.victory h2 { margin: 10px 0 0; color: #fff3d9; font-size: clamp(52px, 10vw, 108px); font-weight: 1000; letter-spacing: -.065em; line-height: 1.12; -webkit-text-stroke: 7px #123c59; paint-order: stroke fill; text-shadow: 0 7px 0 #123c59; }
+.victory-team { margin: 22px 0 0; padding: 8px 24px; border: 2px solid #fff8e8; border-radius: 30px; background: var(--team); color: white; font-size: 19px; font-weight: 900; box-shadow: 0 3px 0 #123c5933; }
+#victory-message { margin: 14px 0 0; color: white; font-size: 16px; font-weight: 700; text-shadow: 0 2px 5px #12466a; }
+.victory-stats { display: grid; grid-template-columns: repeat(3, 1fr); width: min(100%, 470px); margin: 25px 0 24px; padding: 19px 10px; border: 3px solid #b9f0ff; border-radius: 18px; background: #effbfff2; box-shadow: 0 5px 0 #1787a780; }
+.victory-stats div + div { border-left: 1px solid #b5dce7; }
+.victory-stats dt { font-size: 11px; font-weight: 800; letter-spacing: .03em; }
+.victory-stats dd { margin: 5px 0 0; font-size: 27px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.victory-replay { display: flex; align-items: center; justify-content: space-between; gap: 36px; min-width: 260px; min-height: 64px; padding: 12px 27px; border: 4px solid #123c59; border-radius: 50px; background: #fff3d9; color: #123c59; box-shadow: 0 5px 0 #ffc74e, 0 9px 0 #123c59; font: inherit; font-size: 24px; font-weight: 900; cursor: pointer; transition: transform .15s; }
+.victory-replay:hover { transform: translateY(-2px); background: #fffaf0; }
+.victory-replay:active { transform: translateY(3px); }
+.victory-home { margin: 25px 0 0; padding: 10px 23px; border: 1px solid #ffffffa6; border-radius: 30px; background: #123c59c9; color: white; font-size: 13px; font-weight: 800; text-decoration: none; }
+.victory-home:hover { background: #123c59; }
+.victory-note { margin: auto 0 0; padding-top: 25px; color: white; font-size: 11px; font-weight: 800; text-shadow: 0 2px 4px #123c59; }
+.victory :focus-visible { outline: 3px solid #ffdb67; outline-offset: 5px; }
+@keyframes victory-arrive { from { opacity: 0; transform: translateY(12px) scale(.9); } to { opacity: 1; transform: none; } }
+@media (max-width: 480px) {
+  .victory { padding: 20px 16px; }
+  .victory-kicker { margin-top: 24px; }
+  .victory h2 { -webkit-text-stroke-width: 5px; }
+  .victory-stats { margin-top: 20px; }
+}
+@media (max-height: 740px) and (min-width: 600px) {
+  .victory { padding: 16px; }
+  .victory-kicker { margin-top: 14px; }
+  .victory-medal { width: 72px; height: 72px; }
+  .victory h2 { font-size: 72px; }
+  .victory-stats { margin: 18px 0; padding: 12px; }
+  .victory-note { padding-top: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .victory-medal { animation: none; }
+  .victory-replay { transition: none; }
+}
+
+.victory[data-outcome="loss"] {
+  background: linear-gradient(#24385736, #24385740), url('/assets/defeat-landscape.jpg') center / cover #667a96;
+}
+.victory-loss-mark { display: none; }
+.victory[data-outcome="loss"] .victory-medal { display: none; }
+.victory[data-outcome="loss"] .victory-loss-mark {
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  border: 4px solid #e6f2f4;
+  border-radius: 50%;
+  background: #213e69b8;
+  color: #fff3d9;
+  box-shadow: 0 0 0 9px #ffffff24;
+  font-size: 32px;
+  font-style: italic;
+  font-weight: 900;
+  transform: rotate(-8deg);
+}
+.victory[data-outcome="loss"] .victory-team { background: #3b5b80; }
+.victory[data-outcome="loss"] .victory-stats { border-color: #d6e3e7; background: #edf3f4ed; box-shadow: 0 5px 0 #314f6980; }
+.victory[data-outcome="loss"] .victory-replay { box-shadow: 0 5px 0 #b8d1dc, 0 9px 0 #123c59; }
+.victory-spark {
+  position: fixed;
+  top: -14px;
+  left: var(--x);
+  width: 8px;
+  height: 18px;
+  border-radius: 2px;
+  background: #fff1a8;
+  pointer-events: none;
+  animation: victory-fall 2.3s ease-in var(--delay) both;
+}
+.victory-spark:nth-of-type(even) { background: #a9e9ee; }
+@keyframes victory-fall {
+  to { transform: translate(var(--drift), 75vh) rotate(440deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .victory-spark { display: none; } }
