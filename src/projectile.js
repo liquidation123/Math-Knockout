@@ -1,5 +1,5 @@
 import { COMBAT_Z, buildTrajectory } from "./equations.js";
-import { ARENA, OBSTACLES, PLAYER_SIZE, applyKnockback } from "./physics.js";
+import { OBSTACLES, PLAYER_SIZE, applyKnockback, insideArena } from "./physics.js";
 
 export const DAMAGE = 20;
 export const KNOCKBACK = 3.2;
@@ -8,13 +8,13 @@ export const ATTACK_DURATION = 0.7;
 export const PROJECTILE_SPEED = 10;
 export const PROJECTILE_RADIUS = 0.12;
 
-export function createAttack(attackerIndex, players, equation, time, preview = null) {
+export function createAttack(attackerIndex, players, equation, time, preview = null, obstacles = OBSTACLES) {
   const attacker = players[attackerIndex];
   const trajectory = preview || buildTrajectory(equation, attacker.position, attacker.team === 0 ? 1 : -1);
   const origin = trajectory.origin;
   const path = trajectory.path.map((point) => ({ ...point }));
   return {
-    attackerIndex, equation, path,
+    attackerIndex, equation, path, obstacles,
     origin: { x: origin.x, y: origin.y, z: COMBAT_Z },
     position: { x: origin.x, y: origin.y, z: COMBAT_Z },
     segment: 1,
@@ -66,26 +66,27 @@ export function segmentBoxHit(start, end, box, padding = 0) {
 }
 
 function boundaryHit(start, end) {
-  let first = null;
-  for (const [axis, half] of [["x", ARENA.halfWidth], ["y", ARENA.depth / 2]]) {
-    const limit = half - PROJECTILE_RADIUS;
-    if (Math.abs(start[axis]) > limit) return 0;
-    const delta = end[axis] - start[axis];
-    let t = null;
-    if (delta > 0 && end[axis] >= limit) t = (limit - start[axis]) / delta;
-    if (delta < 0 && end[axis] <= -limit) t = (-limit - start[axis]) / delta;
-    if (t !== null && (first === null || t < first)) first = t;
+  if (!insideArena(start.x, start.y, PROJECTILE_RADIUS)) return 0;
+  if (insideArena(end.x, end.y, PROJECTILE_RADIUS)) return null;
+  // The summit is convex: bisect the segment where it crosses its edge.
+  let low = 0, high = 1;
+  for (let i = 0; i < 48; i += 1) {
+    const middle = (low + high) / 2;
+    const x = start.x + (end.x - start.x) * middle;
+    const y = start.y + (end.y - start.y) * middle;
+    if (insideArena(x, y, PROJECTILE_RADIUS)) low = middle;
+    else high = middle;
   }
-  return first;
+  return high;
 }
 
-export function firstCollision(start, end, players, attackerIndex) {
+export function firstCollision(start, end, players, attackerIndex, obstacles = OBSTACLES) {
   const boundary = boundaryHit(start, end);
   let first = boundary === null ? null : { t: boundary, reason: "Map boundary" };
   function consider(t, reason, playerIndex = null) {
     if (t !== null && (!first || t < first.t)) first = { t, reason, playerIndex };
   }
-  for (const obstacle of OBSTACLES) {
+  for (const obstacle of obstacles) {
     consider(segmentBoxHit(start, end, obstacle, PROJECTILE_RADIUS), "Obstacle");
   }
   players.forEach((player, index) => {
@@ -99,7 +100,7 @@ export function firstCollision(start, end, players, attackerIndex) {
 
 function travelSegment(attack, end, players) {
   const start = attack.position;
-  const collision = firstCollision(start, end, players, attack.attackerIndex);
+  const collision = firstCollision(start, end, players, attack.attackerIndex, attack.obstacles);
   const t = collision ? collision.t : 1;
   attack.position = {
     x: start.x + (end.x - start.x) * t,

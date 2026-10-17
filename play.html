@@ -1,71 +1,28 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Out-Mathed</title>
-    <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/game.css">
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "/node_modules/three/build/three.module.js",
-          "math-expression-evaluator": "/src/math-parser-browser.js"
-        }
-      }
-    </script>
-  </head>
-  <body>
-    <main>
-      <section id="arena" aria-label="3D combat arena"></section>
-
-      <header id="hud" class="panel">
-        <div class="title-row">
-          <h1>Out-Mathed</h1>
-          <button id="restart" type="button">New round</button>
-        </div>
-        <section class="teams" aria-label="Team health">
-          <div class="team blue">
-            <div class="team-heading"><strong>Blue</strong><span id="blue-stats">3/3 surviving</span></div>
-            <progress id="blue-health" max="300" value="300" aria-label="Blue team health"></progress>
-            <span id="blue-characters" class="character-list"></span>
-          </div>
-          <div class="team red">
-            <div class="team-heading"><strong>Red</strong><span id="red-stats">3/3 surviving</span></div>
-            <progress id="red-health" max="300" value="300" aria-label="Red team health"></progress>
-            <span id="red-characters" class="character-list"></span>
-          </div>
-        </section>
-      </header>
-
-      <section id="controls" class="panel" aria-label="Equation controls">
-        <div class="turn-row"><strong id="turn">Blue's turn</strong><span id="caster"></span></div>
-        <div class="equation-row">
-          <label for="expression">y =</label>
-          <input id="expression" type="text" value="0" maxlength="200"
-            spellcheck="false" autocomplete="off" aria-describedby="equation-help equation-error">
-          <button id="fire" type="button">Fire</button>
-        </div>
-        <p id="equation-error" role="status"></p>
-        <p id="equation-help">Click a teammate to select. Preview, then Fire. Characters move only through knockback.</p>
-        <p class="anchoring-help">Curves shift automatically to start at your character (0, 0). One grid square = one unit.</p>
-        <p class="examples">Try (x-1)^2 + 1 · e^x · 2sin(1/2 x) - 1 · Trigonometry uses radians.</p>
-        <label class="pov-toggle"><input id="projectile-pov" type="checkbox" checked> Projectile camera</label>
-        <label class="view-choice">View
-          <select id="view-mode" aria-label="Arena camera">
-            <option value="summit">Summit 3D</option>
-            <option value="map">Top-down map</option>
-            <option value="character">Character view</option>
-          </select>
-        </label>
-        <p id="camera-help" hidden>Click the arena to look around. Press Esc to release the mouse; use a map view to select another character.</p>
-        <p id="status" role="status"></p>
-        <div id="result" hidden>
-          <strong id="winner"></strong>
-          <span id="finish-reason"></span>
-        </div>
-      </section>
-    </main>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Out-Mathed • Summit Duel</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/duel.css">
+  <script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/","math-expression-evaluator":"/src/math-parser-browser.js"}}</script>
+</head>
+<body>
+  <main>
+    <section id="arena" aria-label="3D mountain duel"></section>
+    <div id="loading">Loading the summit…</div>
+    <header id="hud" class="panel">
+      <div class="brand"><h1>OUT-MATHED <span>SUMMIT DUEL</span></h1><button id="invite">Copy invite link</button></div>
+      <div class="score"><span id="blue">Blue · waiting</span><strong id="phase">Connecting…</strong><span id="red">Red · waiting</span></div>
+    </header>
+    <div id="countdown" aria-live="assertive" hidden>3</div>
+    <section id="controls" class="panel">
+      <div class="control-top"><strong id="side">Finding your side…</strong><span id="location">The dotted line is your path if unobstructed.</span></div>
+      <form id="form"><label for="equation">y =</label><input id="equation" value="0" maxlength="200" autocomplete="off" spellcheck="false"><button id="lock" type="submit">Lock in</button></form>
+      <div class="control-bottom"><span id="error" role="status">Both players choose secretly, then launch together.</span><button id="view">Summit view</button><button id="reset">New duel</button></div>
+    </section>
+  </main>
+  <script type="module" src="/src/duel-client.js"></script>
+</body>
 </html>

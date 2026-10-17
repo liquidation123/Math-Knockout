@@ -1,9 +1,9 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ARENA, PLAYER_SIZE } from "./physics.js";
 import { PROJECTILE_RADIUS } from "./projectile.js";
 import { buildCartesianGrid, coordinateText } from "./grid.js";
 import { effectKind, pathLookAhead } from "./cinematic.js";
-import { createSummit } from "./summit.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -37,7 +37,7 @@ export function createView(container, hud, controls) {
   summitCamera.up.set(0, 0, 1);
   const characterCamera = new THREE.PerspectiveCamera(72, 1, 0.05, 120);
   characterCamera.up.set(0, 0, 1);
-  let viewMode = "summit";
+  let viewMode = "character";
   let lookYaw = 0;
   let lookPitch = 0;
   let lookAtIndex = -1;
@@ -46,7 +46,7 @@ export function createView(container, hud, controls) {
   // An orthographic POV keeps the same mathematical scale as the bird's-eye map.
   const povCamera = new THREE.OrthographicCamera(-8, 8, 5, -5, 0.1, 100);
   povCamera.up.set(0, 0, 1);
-  let activeCamera = summitCamera;
+  let activeCamera = characterCamera;
   let cinematicMode = "bird";
   let cinematicAttack = null;
   let cinematicTimer = 0;
@@ -77,7 +77,7 @@ export function createView(container, hud, controls) {
     lookPitch = Math.max(-1.2, Math.min(1.2, lookPitch - event.movementY * 0.0025));
   });
 
-  const ambient = new THREE.HemisphereLight(0xf6fbff, 0x7eabd1, 2);
+  const ambient = new THREE.HemisphereLight(0xfffaf0, 0xb4a47a, 1.5);
   ambient.position.set(0, 0, 1);
   scene.add(ambient);
   const light = new THREE.DirectionalLight(0xfff5db, 2.3);
@@ -90,7 +90,16 @@ export function createView(container, hud, controls) {
   light.shadow.mapSize.set(1024, 1024);
   scene.add(light);
 
-  createSummit(scene);
+  const ready = new Promise((resolve) => {
+    new GLTFLoader().load("/assets/mountain.glb", (gltf) => {
+      gltf.scene.rotation.x = Math.PI / 2; // Blender Z-up to the game's XY ground.
+      scene.add(gltf.scene);
+      resolve();
+    }, undefined, () => {
+      document.querySelector("#phase").textContent = "Mountain failed to load";
+      resolve();
+    });
+  });
 
 
   const gridLines = new THREE.LineSegments(
@@ -155,7 +164,7 @@ export function createView(container, hud, controls) {
     const placedLabels = [];
     characterLabels.forEach((label, index) => {
       const player = players[index];
-      label.hidden = player.eliminated || (index !== selectedIndex && player.team === shooter.team);
+      label.hidden = !player || player.eliminated || (index !== selectedIndex && player.team === shooter.team);
       if (label.hidden) return;
       label.textContent = player.name + " " + coordinateText(player.position, origin);
       label.className = "coordinate-label " + (index === selectedIndex ? "shooter-coordinate" : "enemy-coordinate");
@@ -227,8 +236,32 @@ export function createView(container, hud, controls) {
       const position = player.position;
       mesh.position.set(position.x, position.y, position.z);
       mesh.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
-      mesh.children[0].visible = index === selectedIndex;
+      mesh.children[0].visible = index === selectedIndex && !mesh.userData.shaped;
     });
+  }
+
+  function setPlayerShape(index, mask) {
+    if (!mask.includes("1")) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 128; canvas.height = 80;
+    const context = canvas.getContext("2d");
+    const pixels = context.createImageData(128, 80);
+    for (let i = 0; i < mask.length; i++) {
+      pixels.data.set([255, 255, 255, mask[i] === "1" ? 255 : 0], i * 4);
+    }
+    context.putImageData(pixels, 0, 0);
+    const texture = new THREE.CanvasTexture(canvas);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+      0, -0.7, -0.5, 0, 0.7, -0.5, 0, 0.7, 0.5, 0, -0.7, 0.5,
+    ], 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    const mesh = playerMeshes[index];
+    if (mesh.userData.shaped) { mesh.geometry.dispose(); mesh.material.map.dispose(); mesh.material.dispose(); }
+    mesh.geometry = geometry;
+    mesh.material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+    mesh.userData.shaped = true;
   }
 
   function drawProjectile(attack) {
@@ -464,6 +497,20 @@ export function createView(container, hud, controls) {
       line.renderOrder = preview ? 1 : 2;
       group.add(line);
     }
+    if (preview) {
+      const dots = sections.flatMap((points) => points.filter((_, i) => i > 25 && i % 16 === 0));
+      const geometry = new THREE.SphereGeometry(0.05, 6, 4);
+      const material = new THREE.MeshBasicMaterial({ color: 0xffe58e, depthTest: false });
+      const markers = new THREE.InstancedMesh(geometry, material, dots.length);
+      const position = new THREE.Object3D();
+      dots.forEach((point, index) => {
+        position.position.set(point.x, point.y, point.z + 0.12);
+        position.updateMatrix();
+        markers.setMatrixAt(index, position.matrix);
+      });
+      markers.renderOrder = 3;
+      group.add(markers);
+    }
     scene.add(group);
     return group;
   }
@@ -481,9 +528,9 @@ export function createView(container, hud, controls) {
     const height = container.clientHeight;
     const aspect = width / height;
     frameCamera(birdCamera, aspect, (hud.offsetHeight + 24) / height, (controls.offsetHeight + 24) / height);
-    const distance = Math.max(34, 30 / aspect);
+    const distance = Math.max(46, 40 / aspect);
     summitCamera.position.set(0, -distance * 0.8, distance * 0.7);
-    summitCamera.lookAt(0, 0, -1.5);
+    summitCamera.lookAt(0, 0, -5);
     summitCamera.aspect = characterCamera.aspect = aspect;
     summitCamera.updateProjectionMatrix();
     characterCamera.updateProjectionMatrix();
@@ -524,8 +571,10 @@ export function createView(container, hud, controls) {
   }
 
   return {
+    ready,
     canvas: renderer.domElement,
     drawPlayers,
+    setPlayerShape,
     drawGrid,
     drawProjectile,
     onCharacterClick,

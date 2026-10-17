@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "math-expression-evaluator": "2.0.7",
-    "three": "0.186.1"
+    "three": "0.186.1",
+    "ws": "8.22.0"
   }
 }
