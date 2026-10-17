@@ -262,33 +262,28 @@ export function createView(container, hud, controls) {
     }
   }
 
-  function smoothCamera(desiredPosition, target, amount) {
-    povCamera.position.lerp(desiredPosition, amount);
-    // Recompute the look direction after the smoothed position update.
-    povCamera.lookAt(target);
-  }
-
   function projectileViewTarget(attack, atImpact = false) {
     const point = atImpact && impactPoint ? impactPoint : attack.position;
     const look = pathLookAhead(attack.path, point, attack.segment, 3);
     const forward = new THREE.Vector3(look.forward.x, look.forward.y, 0);
-    const target = new THREE.Vector3(look.target.x, look.target.y, 0.35);
-    // Stay above the shared XY plane so the obstacle layout remains readable.
-    const desired = new THREE.Vector3(point.x, point.y, 6);
+    const height = point.z + 0.6;
+    // Equal camera and target heights keep the viewing direction entirely in XY.
+    const target = new THREE.Vector3(look.target.x, look.target.y, height);
+    const desired = new THREE.Vector3(point.x, point.y, height);
     desired.addScaledVector(forward, -1.6);
-    if (atImpact) desired.z = 8;
     return { desired, target };
   }
 
   function beginProjectilePOV(attack) {
     if (!attack) return;
     cinematicAttack = attack;
-    cinematicMode = "transition";
+    cinematicMode = "projectile";
     cinematicTimer = 0;
     impactPoint = null;
     activeCamera = povCamera;
-    povCamera.position.copy(birdCamera.position);
-    povCamera.quaternion.copy(birdCamera.quaternion);
+    const view = projectileViewTarget(attack);
+    povCamera.position.copy(view.desired);
+    povCamera.lookAt(view.target);
   }
 
   function notifyProjectileStopped(attack) {
@@ -299,26 +294,22 @@ export function createView(container, hud, controls) {
       cinematicMode = "impact";
       cinematicTimer = 0;
     } else {
-      cinematicMode = "return";
-      cinematicTimer = 0;
+      finishProjectilePOV();
     }
   }
 
   function finishProjectilePOV() {
-    if (activeCamera === birdCamera) return;
-    cinematicMode = "return";
+    activeCamera = birdCamera;
+    cinematicMode = "bird";
+    cinematicAttack = null;
     cinematicTimer = 0;
+    impactPoint = null;
   }
 
   function setProjectilePOVEnabled(enabled) {
     if (!enabled) {
-      activeCamera = birdCamera;
-      cinematicMode = "bird";
-      cinematicAttack = null;
-      impactPoint = null;
+      finishProjectilePOV();
       trail.visible = false;
-    } else if (cinematicAttack) {
-      beginProjectilePOV(cinematicAttack);
     }
   }
 
@@ -335,32 +326,22 @@ export function createView(container, hud, controls) {
 
   function updateCinematic(attack, dt, enabled) {
     if (!enabled) return;
-    if (attack && attack !== cinematicAttack) beginProjectilePOV(attack);
+    if (attack && !attack.stopped && attack !== cinematicAttack) beginProjectilePOV(attack);
     if (!cinematicAttack) return;
     if (cinematicMode === "impact") {
       cinematicTimer += dt;
       const view = projectileViewTarget(cinematicAttack, true);
-      smoothCamera(view.desired, view.target, 1 - Math.exp(-dt * 10));
+      povCamera.position.copy(view.desired);
+      povCamera.lookAt(view.target);
       if (cinematicTimer > 0.3) {
-        cinematicMode = "return";
-        cinematicTimer = 0;
-      }
-      return;
-    }
-    if (cinematicMode === "return") {
-      cinematicTimer += dt;
-      smoothCamera(birdCamera.position, new THREE.Vector3(0, 0, 0), 1 - Math.exp(-dt * 7));
-      if (cinematicTimer > 0.35) {
-        activeCamera = birdCamera;
-        cinematicMode = "bird";
-        cinematicAttack = null;
-        impactPoint = null;
+        finishProjectilePOV();
       }
       return;
     }
     if (!attack || attack.stopped) return;
     const view = projectileViewTarget(attack);
-    smoothCamera(view.desired, view.target, 1 - Math.exp(-dt * 8));
+    povCamera.position.copy(view.desired);
+    povCamera.lookAt(view.target);
     cinematicMode = "projectile";
   }
 
