@@ -10,4 +10,4 @@ With Node.js 22 or newer:
 Open http://127.0.0.1:5173/. The homepage opens the drawing screen at
 /create.html; the arena is also available directly at /play.html.
 
-Vercel Deployment: https://vercel.com/liquidation/math-knockout
+Vercel Deployment: https://math-knockout.vercel.app/
