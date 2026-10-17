@@ -51,8 +51,6 @@ p { margin: 6px 0 0; font-size: 12px; line-height: 1.35; }
 #equation-error { color: #ff9eac; }
 #equation-error:empty { display: none; }
 #expression[aria-invalid="true"] { border-color: #ff9eac; }
-#result { margin-top: 7px; color: #ffef8b; }
-#finish-reason { margin-left: 8px; font-size: 12px; }
 [hidden] { display: none !important; }
 @media (max-width: 480px) {
   .panel { padding: 8px 10px; }
@@ -97,3 +95,6 @@ p { margin: 6px 0 0; font-size: 12px; line-height: 1.35; }
   font-size: 0.78rem;
   color: #dbe7f7;
 }
+.result-view { display: inline-flex; align-items: center; gap: 6px; margin-left: 14px; color: #dbe7f7; font-size: 12px; }
+.result-view select { padding: 3px 5px; border: 1px solid #879bb7; border-radius: 4px; background: #172438; color: #edf2f8; font: inherit; }
+.result-view select:focus-visible { outline: 2px solid #76b7ff; outline-offset: 2px; }

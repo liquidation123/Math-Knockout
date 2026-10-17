@@ -7,8 +7,8 @@ const output = new URL("./dist/", root);
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 for (const file of [
-  "index.html", "create.html", "play.html",
-  "style.css", "create.css", "game.css", "create.js", "src", "assets",
+  "index.html", "create.html", "play.html", "victory.html",
+  "style.css", "create.css", "game.css", "victory.css", "create.js", "src", "assets",
 ]) {
   await cp(new URL(file, root), new URL(file, output), { recursive: true });
 }

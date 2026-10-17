@@ -6,6 +6,7 @@
     <title>Out-Mathed</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/game.css">
+    <link rel="stylesheet" href="/victory.css">
     <script type="importmap">
       {
         "imports": {
@@ -51,11 +52,14 @@
         <p class="anchoring-help">Curves shift automatically to start at your character (0, 0). One grid square = one unit.</p>
         <p class="examples">Try (x-1)^2 + 1 · e^x · 2sin(1/2 x) - 1 · Trigonometry uses radians.</p>
         <label class="pov-toggle"><input id="projectile-pov" type="checkbox" checked> Projectile camera</label>
+        <label class="result-view">View result as
+          <select id="result-perspective">
+            <option value="">Spectator</option>
+            <option value="Blue">Blue</option>
+            <option value="Red">Red</option>
+          </select>
+        </label>
         <p id="status" role="status"></p>
-        <div id="result" hidden>
-          <strong id="winner"></strong>
-          <span id="finish-reason"></span>
-        </div>
       </section>
     </main>
     <script type="module" src="/src/main.js"></script>
