@@ -7,7 +7,7 @@ import { createDuel, launchDuel, lockEquation, updateDuel } from "./src/duel.js"
 import { takeFixedSteps } from "./src/physics.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
-const port = Number(process.env.PORT || 5173);
+let port = Number(process.env.PORT || 5173);
 const host = process.env.HOST || "127.0.0.1";
 const types = {
   ".html": "text/html",
@@ -140,6 +140,21 @@ setInterval(() => {
   rooms.forEach(publish);
 }, 50);
 
-server.listen(port, host, () => {
+// ws forwards HTTP server errors here, including an occupied listening port.
+sockets.on("error", (error) => {
+  if (error.code === "EADDRINUSE" && !process.env.PORT && port < 5182) {
+    console.warn("Port " + port + " is busy; trying " + (port + 1) + ".");
+    port += 1;
+    server.listen(port, host);
+    return;
+  }
+  console.error("Could not start Out-Mathed: " + error.message);
+  if (error.code === "EADDRINUSE") {
+    console.error("Stop the other server, or choose a free port: PORT=5183 npm start");
+  }
+  process.exit(1);
+});
+server.on("listening", () => {
   console.log("Out-Mathed: http://" + host + ":" + server.address().port);
 });
+server.listen(port, host);
