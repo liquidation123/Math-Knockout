@@ -1,3 +1,4 @@
+import { createVictoryScreen } from "./victory.js";
 import { buildPreview } from "./equations.js";
 import { createView } from "./scene.js";
 import { takeFixedSteps } from "./physics.js";
@@ -11,6 +12,13 @@ const expression = document.querySelector("#expression");
 const fire = document.querySelector("#fire");
 const errorLabel = document.querySelector("#equation-error");
 const povToggle = document.querySelector("#projectile-pov");
+const resultPerspective = document.querySelector("#result-perspective");
+const teamParam = new URLSearchParams(location.search).get('team');
+resultPerspective.value = ['Blue', 'Red'].find((name) => name.toLowerCase() === teamParam?.toLowerCase()) || '';
+const victory = createVictoryScreen(() => {
+  resetRound();
+  expression.focus();
+}, () => resultPerspective.value || null);
 let round;
 let clock;
 let previousTime;
@@ -35,7 +43,7 @@ function resetRound() {
   drawnAttack = null;
   previewCurve = null;
   previewKey = "";
-  document.querySelector("#result").hidden = true;
+  victory.hide();
   console.info("New round", round.players.map((player) => ({
     name: player.name, x: player.position.x, y: player.position.y,
   })));
@@ -131,12 +139,7 @@ function updateReadout() {
   fire.disabled = Boolean(!preview || preview.error || round.result || round.attack ||
     selected.eliminated || Math.abs(selected.position.z - 0.5) > 0.05);
   if (status.textContent !== round.message) status.textContent = round.message;
-  if (round.result) {
-    document.querySelector("#result").hidden = false;
-    document.querySelector("#winner").textContent =
-      round.result.winner === "Draw" ? "Draw" : round.result.winner + " wins";
-    document.querySelector("#finish-reason").textContent = round.result.reason;
-  }
+  if (round.result) victory.show(round);
 }
 
 function drawAttack() {
