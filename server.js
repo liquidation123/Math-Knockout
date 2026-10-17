@@ -8,6 +8,7 @@ import { takeFixedSteps } from "./src/physics.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 5173);
+const host = process.env.HOST || "127.0.0.1";
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",
@@ -133,6 +134,6 @@ setInterval(() => {
   rooms.forEach(publish);
 }, 50);
 
-server.listen(port, "127.0.0.1", () => {
-  console.log("Out-Mathed: http://127.0.0.1:" + port);
+server.listen(port, host, () => {
+  console.log("Out-Mathed: http://" + host + ":" + port);
 });
