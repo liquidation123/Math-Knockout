@@ -18,21 +18,32 @@ test("long swept segments detect small circles and thin obstacles between endpoi
   assert.equal(segmentCircleHit({ x: -10, y: 2 }, { x: 10, y: 2 }, { x: 0, y: 0 }, 0.1), null);
 });
 
-test("a projectile damages only the first enemy, once, and ignores teammates", () => {
+test("a projectile passes through multiple enemies, hits each once, and ignores teammates", () => {
   const players = [blue(), blue(-2), red(0), red(4)];
   const attack = createAttack(0, players, parseEquation("0"), 0);
   assert.ok(players.every((p) => p.health === 100));
   updateProjectile(attack, players, 0.6);
-  assert.equal(attack.reason, "Enemy hit");
-  assert.deepEqual(attack.impactPoint, attack.position);
+  assert.equal(attack.stopped, false);
+  assert.equal(attack.reason, "");
   assert.equal(players[2].health, 80);
   assert.equal(players[1].health, 100);
   assert.equal(players[3].health, 100);
-  assert.ok(attack.position.x < 0);
+  close(attack.position.x, 0);
+  updateProjectile(attack, players, 0.5);
+  close(attack.position.x, 5);
+  assert.equal(players[3].health, 80);
+  assert.deepEqual([...attack.hitEnemies], [2, 3]);
+  assert.deepEqual(attack.hits.map((hit) => hit.playerIndex), [2, 3]);
+  close(attack.hits[0].position.x, -0.62);
+  close(attack.hits[1].position.x, 3.38);
   const velocity = { ...players[2].velocity };
+  const secondVelocity = { ...players[3].velocity };
   for (let i = 0; i < 30; i += 1) updateProjectile(attack, players, 0.1);
   assert.equal(players[2].health, 80);
   assert.deepEqual(players[2].velocity, velocity);
+  assert.equal(players[3].health, 80);
+  assert.deepEqual(players[3].velocity, secondVelocity);
+  assert.equal(attack.reason, "Map boundary");
 });
 
 test("an obstacle blocks an enemy behind it, while a nearer enemy is hit first", () => {
@@ -47,9 +58,36 @@ test("an obstacle blocks an enemy behind it, while a nearer enemy is hit first",
   players = [blue(-7, 4), red(-6, 4)];
   attack = createAttack(0, players, parseEquation("0"), 0);
   updateProjectile(attack, players, 0.6);
-  assert.equal(attack.reason, "Enemy hit");
+  assert.equal(attack.reason, "Obstacle");
   assert.equal(players[1].health, 80);
-  assert.ok(attack.position.x < -6);
+  close(attack.position.x, -4 - PROJECTILE_RADIUS);
+});
+
+test("one long segment hits enemies in travel order and stops before enemies behind a wall", () => {
+  const players = [blue(-7, 4), red(7, 4), red(-5, 4), red(-6, 4)];
+  const preview = {
+    origin: players[0].position,
+    path: [{ x: -7, y: 4, z: 0.5 }, { x: 10, y: 4, z: 0.5 }],
+  };
+  const attack = createAttack(0, players, parseEquation("0"), 0, preview);
+  updateProjectile(attack, players, 2);
+  assert.deepEqual(attack.hits.map((hit) => hit.playerIndex), [3, 2]);
+  assert.deepEqual(players.map((player) => player.health), [100, 100, 80, 80]);
+  assert.equal(attack.reason, "Obstacle");
+  close(attack.position.x, -4 - PROJECTILE_RADIUS);
+  assert.deepEqual(attack.impactPoint, attack.position);
+});
+
+test("overlapping enemies and repeated contact cannot apply a second hit", () => {
+  const players = [blue(), red(0), red(0.1)];
+  const attack = createAttack(0, players, parseEquation("0"), 0);
+  updateProjectile(attack, players, 0.56);
+  assert.deepEqual(players.map((player) => player.health), [100, 80, 80]);
+  const velocities = players.map((player) => ({ ...player.velocity }));
+  for (let tick = 0; tick < 20; tick += 1) updateProjectile(attack, players, 0.005);
+  assert.deepEqual(players.map((player) => player.velocity), velocities);
+  assert.equal(attack.hits.length, 2);
+  assert.equal(attack.stopped, false);
 });
 
 test("all four map boundaries stop a swept shot before an outside target", () => {
@@ -101,7 +139,7 @@ test("a constant offset is anchored through the shooter with no launch delay or 
 
 test("every translated preview is the exact immutable path used by the projectile", () => {
   for (const team of [0, 1]) {
-    for (const expression of ["6", "x+6", "e^x", "(x-1)^2+1", "1/x", "ln(x)"]) {
+    for (const expression of ["6", "x+6", "e^x", "(x-1)^2+1", "(x-2)^2+6", "(x+2)^2-3", "sin(x-1)", "1/x", "ln(x)"]) {
       const players = [createPlayer("Shooter", team === 0 ? -11 : 11, 0, 0.5, team)];
       const preview = buildPreview(expression, players[0].position, team === 0 ? 1 : -1);
       assert.equal(preview.error, "");
@@ -178,8 +216,10 @@ test("a slow projectile survives the former cutoff and reaches a distant enemy",
   close(attack.position.x, 9);
   assert.equal(attack.stopped, false);
   updateProjectile(attack, players, 0.2);
-  assert.equal(attack.reason, "Enemy hit");
+  assert.equal(attack.stopped, false);
   assert.equal(players[1].health, 80);
+  updateProjectile(attack, players, ATTACK_DURATION);
+  assert.equal(attack.reason, "Map boundary");
   const stoppedAt = attack.stoppedAt;
   updateProjectile(attack, players, ATTACK_DURATION);
   assert.equal(attack.stoppedAt, stoppedAt);

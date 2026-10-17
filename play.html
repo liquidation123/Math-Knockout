@@ -47,7 +47,12 @@
           <button id="fire" type="button">Fire</button>
         </div>
         <p id="equation-error" role="status"></p>
-        <p id="equation-help">Click a teammate to select. Preview, then Fire. Characters move only through knockback.</p>
+        <div class="force-row">
+          <label for="force">Force</label>
+          <input id="force" type="range" min="0.5" max="3" step="0.1" value="1">
+          <output id="force-value" for="force">1.0×</output>
+        </div>
+        <p id="equation-help">Click a teammate to select. Higher Force increases knockback and recoil. Preview, then Fire.</p>
         <p class="anchoring-help">Curves shift automatically to start at your character (0, 0). One grid square = one unit.</p>
         <p class="examples">Try (x-1)^2 + 1 · e^x · 2sin(1/2 x) - 1 · Trigonometry uses radians.</p>
         <label class="pov-toggle"><input id="projectile-pov" type="checkbox" checked> Projectile camera</label>

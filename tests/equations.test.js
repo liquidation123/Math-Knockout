@@ -130,6 +130,27 @@ test("all anchor examples preserve shape in both firing directions and retain th
   }
 });
 
+test("horizontal shifts retain their shape and vertex while anchoring both teams", () => {
+  const origin = { x: -3.2, y: 1.7 };
+  for (const [expression, shifted, vertexX] of [
+    ["(x-2)^2+6", (x) => (x - 2) ** 2 - 4, 2],
+    ["(x+2)^2-3", (x) => (x + 2) ** 2 - 4, -2],
+    ["sin(x-1)", (x) => Math.sin(x - 1) - Math.sin(-1), null],
+  ]) {
+    for (const direction of [1, -1]) {
+      const preview = buildPreview(expression, origin, direction);
+      assert.equal(preview.error, "");
+      assert.deepEqual(preview.path[0], { ...origin, z: COMBAT_Z });
+      for (const point of preview.path) close(point.y - origin.y, shifted(point.x - origin.x));
+      if (vertexX !== null) {
+        const vertex = preview.sections.flat().find((point) => Math.abs(point.x - origin.x - vertexX) < 1e-8);
+        assert.ok(vertex);
+        close(vertex.y - origin.y, -4);
+      }
+    }
+  }
+});
+
 test("undefined zero uses the first finite sample in the firing direction, translating X and Y", () => {
   const origin = { x: 3.1, y: -1.7 };
   for (const [text, direction, expectedX] of [

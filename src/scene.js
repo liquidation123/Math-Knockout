@@ -12,6 +12,20 @@ export function createCamera() {
   return camera;
 }
 
+export function createProjectileCamera() {
+  // Perspective makes floor and wall depth visible while looking level along XY.
+  const camera = new THREE.PerspectiveCamera(65, 1, 0.03, 100);
+  camera.up.set(0, 0, 1);
+  return camera;
+}
+
+export function aimProjectileCamera(camera, attack, point = attack.position) {
+  const look = pathLookAhead(attack.path, point, attack.segment, 3);
+  camera.position.set(point.x - look.forward.x * 1.6, point.y - look.forward.y * 1.6, point.z);
+  // Same height and a direct aim keep the bullet centered without Z tilt.
+  camera.lookAt(point.x, point.y, point.z);
+}
+
 export function frameCamera(camera, aspect, topInset = 0, bottomInset = 0) {
   // Insets are fractions of viewport height occupied by the gameplay controls.
   const usableHeight = Math.max(0.1, 1 - topInset - bottomInset);
@@ -31,9 +45,7 @@ export function createView(container, hud, controls) {
   scene.background = new THREE.Color(0x152032);
 
   const birdCamera = createCamera();
-  // An orthographic POV keeps the same mathematical scale as the bird's-eye map.
-  const povCamera = new THREE.OrthographicCamera(-8, 8, 5, -5, 0.1, 100);
-  povCamera.up.set(0, 0, 1);
+  const povCamera = createProjectileCamera();
   let activeCamera = birdCamera;
   let cinematicMode = "bird";
   let cinematicAttack = null;
@@ -100,6 +112,7 @@ export function createView(container, hud, controls) {
     );
     mesh.position.set(obstacle.x, obstacle.y, obstacle.height / 2);
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
     scene.add(mesh);
   });
 
@@ -221,8 +234,13 @@ export function createView(container, hud, controls) {
   projectile.renderOrder = 4;
   projectile.visible = false;
   scene.add(projectile);
+  // Reserve space once: setFromPoints cannot grow an existing vertex buffer.
+  const trailLength = 12;
+  const trailGeometry = new THREE.BufferGeometry();
+  trailGeometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(trailLength * 3), 3));
+  trailGeometry.setDrawRange(0, 0);
   const trail = new THREE.Line(
-    new THREE.BufferGeometry(),
+    trailGeometry,
     new THREE.LineBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.8, depthTest: false }),
   );
   trail.renderOrder = 3;
@@ -257,21 +275,13 @@ export function createView(container, hud, controls) {
     const last = trailPoints[trailPoints.length - 1];
     if (!last || last.distanceTo(projectile.position) > 0.03) {
       trailPoints.push(projectile.position.clone());
-      if (trailPoints.length > 12) trailPoints.shift();
-      if (trailPoints.length >= 2) trail.geometry.setFromPoints(trailPoints);
+      if (trailPoints.length > trailLength) trailPoints.shift();
+      const positions = trailGeometry.getAttribute("position");
+      trailPoints.forEach((point, index) => positions.setXYZ(index, point.x, point.y, point.z));
+      positions.needsUpdate = true;
+      trailGeometry.setDrawRange(0, trailPoints.length);
+      trailGeometry.computeBoundingSphere();
     }
-  }
-
-  function projectileViewTarget(attack, atImpact = false) {
-    const point = atImpact && impactPoint ? impactPoint : attack.position;
-    const look = pathLookAhead(attack.path, point, attack.segment, 3);
-    const forward = new THREE.Vector3(look.forward.x, look.forward.y, 0);
-    const height = point.z + 0.6;
-    // Equal camera and target heights keep the viewing direction entirely in XY.
-    const target = new THREE.Vector3(look.target.x, look.target.y, height);
-    const desired = new THREE.Vector3(point.x, point.y, height);
-    desired.addScaledVector(forward, -1.6);
-    return { desired, target };
   }
 
   function beginProjectilePOV(attack) {
@@ -281,9 +291,7 @@ export function createView(container, hud, controls) {
     cinematicTimer = 0;
     impactPoint = null;
     activeCamera = povCamera;
-    const view = projectileViewTarget(attack);
-    povCamera.position.copy(view.desired);
-    povCamera.lookAt(view.target);
+    aimProjectileCamera(povCamera, attack);
   }
 
   function notifyProjectileStopped(attack) {
@@ -330,18 +338,14 @@ export function createView(container, hud, controls) {
     if (!cinematicAttack) return;
     if (cinematicMode === "impact") {
       cinematicTimer += dt;
-      const view = projectileViewTarget(cinematicAttack, true);
-      povCamera.position.copy(view.desired);
-      povCamera.lookAt(view.target);
+      aimProjectileCamera(povCamera, cinematicAttack, impactPoint || cinematicAttack.position);
       if (cinematicTimer > 0.3) {
         finishProjectilePOV();
       }
       return;
     }
     if (!attack || attack.stopped) return;
-    const view = projectileViewTarget(attack);
-    povCamera.position.copy(view.desired);
-    povCamera.lookAt(view.target);
+    aimProjectileCamera(povCamera, attack);
     cinematicMode = "projectile";
   }
 
@@ -472,11 +476,7 @@ export function createView(container, hud, controls) {
     const height = container.clientHeight;
     const aspect = width / height;
     frameCamera(birdCamera, aspect, (hud.offsetHeight + 24) / height, (controls.offsetHeight + 24) / height);
-    const povHalfHeight = 5;
-    povCamera.left = -povHalfHeight * aspect;
-    povCamera.right = povHalfHeight * aspect;
-    povCamera.top = povHalfHeight;
-    povCamera.bottom = -povHalfHeight;
+    povCamera.aspect = aspect;
     povCamera.updateProjectionMatrix();
     renderer.setSize(width, height);
   }
