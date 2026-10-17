@@ -18,7 +18,10 @@ view.ready.then(() => {
   console.error("Mountain load failed:", error);
 });
 readSavedMask().then((mask) => {
-  if (mask) for (let index = 0; index < 6; index += 1) view.setPlayerShape(index, mask);
+  if (mask) {
+    for (let index = 0; index < 6; index += 1) view.setPlayerShape(index, mask);
+    document.querySelector("#character-note").firstChild.textContent = "Your drawing is in the arena · ";
+  }
 }).catch((error) => console.warn("Saved drawing unavailable; using cubes.", error));
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 const expression = document.querySelector("#expression");
