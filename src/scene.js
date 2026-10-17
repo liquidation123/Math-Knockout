@@ -228,7 +228,8 @@ export function createView(container, hud, controls, mode = "projectile") {
       const position = player.position;
       mesh.position.set(position.x, position.y, position.z);
       mesh.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
-      mesh.children[0].visible = index === selectedIndex;
+      mesh.children[0].visible = index === selectedIndex && !mesh.userData.drawing;
+      if (mesh.userData.drawing) mesh.userData.drawing.userData.selection.visible = index === selectedIndex;
       if (mesh.userData.drawing) mesh.userData.tilt = -player.velocity.x * 0.08;
     });
   }
@@ -273,11 +274,16 @@ export function createView(container, hud, controls, mode = "projectile") {
     const face = new THREE.Mesh(new THREE.CircleGeometry(0.59, 40),
       new THREE.MeshBasicMaterial({ color: 0xfff8e7, side: THREE.DoubleSide }));
     face.position.z = 0.01;
+    const selection = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.83, 40),
+      new THREE.MeshBasicMaterial({ color: 0xffef8b, side: THREE.DoubleSide, depthTest: false }));
+    selection.position.z = 0.03;
+    selection.visible = false;
     const aspect = width / height;
     const art = new THREE.Mesh(new THREE.PlaneGeometry(1.02 * Math.min(aspect, 1), 1.02 / Math.max(aspect, 1)),
       new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
     art.position.z = 0.02;
-    drawing.add(badge, face, art);
+    drawing.add(badge, face, art, selection);
+    drawing.userData.selection = selection;
     mesh.add(drawing);
     mesh.userData.drawing = drawing;
     // Keep the original cube as the click target and physical proxy, while showing the sketch.
