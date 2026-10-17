@@ -24,7 +24,7 @@ Open http://127.0.0.1:5173. No build step or network connection is needed after 
 - The selected character anchors the preview. Selecting another character
   cannot move an already-fired projectile's path.
 - Only the current team's selected character can fire. Teams alternate when the
-  active attack's existing 0.7-second lifetime ends. One attack is active at a time.
+  active projectile stops, followed by a 0.7-second impact pause. One attack is active at a time.
 - New round restores all six characters and randomizes their spawns. The current
   expression is retained. Previous iteration/debug views and automatic controls
   have been removed from the website; turns are player-controlled.
@@ -123,11 +123,11 @@ The fixed shot cannot follow later selection changes or knockback.
 The bright sphere uses an emissive material and a small transparent halo; no bloom
 or extra graphics library is used. The solid fired curve is only a visual guide.
 
-On the curve, the ball moves at 60 world units per second measured along the
+On the curve, the ball moves at 10 world units per second measured along the
 sampled polyline. Each update spends speed * elapsedTime along successive segments,
 including partial segments. Steep curves therefore do not make the ball move faster.
-The speed is increased to cover the larger map; the existing attack lifetime
-remains 0.7 second. Curves are visually clipped
+Flight has no time cutoff: the ball travels until a collision, map boundary, or
+the end of its continuous curve. Curves are visually clipped
 to the platform rectangle, without changing the sampled firing path.
 
 Every travelled segment is swept for its earliest collision:
@@ -142,7 +142,7 @@ Every travelled segment is swept for its earliest collision:
 The earliest collision wins, so a shot cannot hit through an earlier obstacle or
 enemy. Teammates are ignored. Only arrival at an enemy removes 20 health and applies
 one XY impulse. The projectile then stops, preventing repeated damage or knockback.
-A stopped ball remains visible until its original lifetime ends.
+A stopped ball remains visible for a 0.7-second impact pause before the next turn.
 
 ## Shooter-relative Cartesian grid
 

@@ -93,6 +93,7 @@ test('canvas tools, ink cap, undo, clear, lock, and saved character', async () =
     assert.ok(pencilInk < 20);
     assert.equal(nodes['#seconds'].textContent, '10');
     buttons[1].fire('click');
+    assert.equal(canvas.dataset.tool, 'line');
     canvas.fire('pointerdown', pointer(40, 80));
     canvas.fire('pointermove', pointer(100, 80));
     canvas.fire('pointerup', pointer(100, 80));
@@ -104,6 +105,7 @@ test('canvas tools, ink cap, undo, clear, lock, and saved character', async () =
     nodes['#undo'].fire('click');
     assert.equal(Number.parseFloat(nodes['#liters'].textContent), pencilInk);
     buttons[2].fire('click');
+    assert.equal(canvas.dataset.tool, 'fill');
     const beforeFill = new Uint8ClampedArray(pixels);
     canvas.fire('pointerdown', pointer(500, 300)); // Whole board exceeds 20L.
     assert.deepEqual(pixels, beforeFill);

@@ -85,15 +85,15 @@ test("only the selected current-team character can fire, and damage waits for ar
   assert.equal(firePreview(round, 4, preview), false);
   assert.ok(firePreview(round, 1, preview));
   assert.ok(round.players.every((p) => p.health === 100));
-  for (let i = 0; i < 20; i += 1) updateRound(round, FIXED_STEP);
+  for (let i = 0; i < 120; i += 1) updateRound(round, FIXED_STEP);
   assert.equal(round.players[4].health, 100);
   assert.equal(round.currentTeam, 0);
-  for (let i = 0; i < 25; i += 1) updateRound(round, FIXED_STEP);
+  for (let i = 0; i < 120; i += 1) updateRound(round, FIXED_STEP);
   assert.equal(round.players[4].health, 80);
   assert.ok(round.players.filter((_, i) => i !== 4).every((p) => p.health === 100));
   assert.ok(round.players[4].velocity.x > 0);
   assert.equal(firePreview(round, 1, preview), false);
-  for (let i = 0; i < 50; i += 1) updateRound(round, FIXED_STEP);
+  for (let i = 0; i < 100; i += 1) updateRound(round, FIXED_STEP);
   assert.equal(round.attack, null);
   assert.equal(round.currentTeam, 1);
   assert.ok(firePreview(round, 4, previewFor(round)));
@@ -139,14 +139,14 @@ test("simultaneous team elimination is a draw, and restart restores all six", ()
   assert.ok(fresh.players.every((p) => !p.eliminated && p.health === 100 && p.position.z === 3));
 });
 
-test("automatic casts alternate teams at the existing cadence", () => {
+test("automatic casts alternate teams after flight with the minimum turn interval", () => {
   const round = groundedRound(true);
   const casts = [];
   for (let tick = 0; casts.length < 6; tick += 1) {
     const before = round.castCount;
     updateRound(round, FIXED_STEP);
     if (before !== round.castCount) casts.push({ team: round.players[round.attack.attackerIndex].team, time: round.time });
-    assert.ok(tick < 1500);
+    assert.ok(tick < 60 / FIXED_STEP, "Six slower shots should finish within 60 simulated seconds.");
   }
   assert.deepEqual(casts.map((cast) => cast.team), [0, 1, 0, 1, 0, 1]);
   for (let i = 1; i < casts.length; i += 1) {

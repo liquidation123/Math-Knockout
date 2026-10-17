@@ -90,3 +90,10 @@ p { margin: 6px 0 0; font-size: 12px; line-height: 1.35; }
 .shooter-coordinate { color: #ffef8b; }
 .enemy-coordinate { color: #ffd3d9; }
 .anchoring-help { color: #d1e6ff; font-size: 11px; }
+.pov-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: #dbe7f7;
+}

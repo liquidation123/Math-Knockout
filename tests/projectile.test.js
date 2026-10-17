@@ -18,12 +18,13 @@ test("long swept segments detect small circles and thin obstacles between endpoi
   assert.equal(segmentCircleHit({ x: -10, y: 2 }, { x: 10, y: 2 }, { x: 0, y: 0 }, 0.1), null);
 });
 
-test("a fast projectile damages only the first enemy, once, and ignores teammates", () => {
+test("a projectile damages only the first enemy, once, and ignores teammates", () => {
   const players = [blue(), blue(-2), red(0), red(4)];
   const attack = createAttack(0, players, parseEquation("0"), 0);
   assert.ok(players.every((p) => p.health === 100));
-  updateProjectile(attack, players, 0.5);
+  updateProjectile(attack, players, 0.6);
   assert.equal(attack.reason, "Enemy hit");
+  assert.deepEqual(attack.impactPoint, attack.position);
   assert.equal(players[2].health, 80);
   assert.equal(players[1].health, 100);
   assert.equal(players[3].health, 100);
@@ -39,6 +40,7 @@ test("an obstacle blocks an enemy behind it, while a nearer enemy is hit first",
   let attack = createAttack(0, players, parseEquation("0"), 0);
   updateProjectile(attack, players, 0.6);
   assert.equal(attack.reason, "Obstacle");
+  assert.deepEqual(attack.impactPoint, attack.position);
   close(attack.position.x, -4 - PROJECTILE_RADIUS);
   assert.equal(players[1].health, 100);
 
@@ -92,7 +94,7 @@ test("a constant offset is anchored through the shooter with no launch delay or 
   updateProjectile(attack, players, 0.01);
   close(attack.position.x, -6 + PROJECTILE_SPEED * 0.01);
   close(attack.position.y, 0);
-  updateProjectile(attack, players, 0.3);
+  updateProjectile(attack, players, 0.6);
   assert.equal(players[1].health, 100);
   assert.equal(players[2].health, 80);
 });
@@ -163,13 +165,35 @@ test("Red traverses decreasing local X without mirroring the equation", () => {
   for (const point of attack.path) close(point.y, 0.1 * (point.x - 6));
 });
 
-test("eliminated or airborne targets are ignored, and lifetime remains bounded", () => {
+test("a slow projectile survives the former cutoff and reaches a distant enemy", () => {
+  assert.equal(PROJECTILE_SPEED, 10);
+  const players = [blue(-11, 0), red(11, 0)];
+  const attack = createAttack(0, players, parseEquation("0"), 0);
+  updateProjectile(attack, players, 1);
+  close(attack.position.x, -1);
+  assert.equal(attack.stopped, false);
+  assert.equal(attack.stoppedAt, null);
+  assert.equal(players[1].health, 100);
+  updateProjectile(attack, players, 1);
+  close(attack.position.x, 9);
+  assert.equal(attack.stopped, false);
+  updateProjectile(attack, players, 0.2);
+  assert.equal(attack.reason, "Enemy hit");
+  assert.equal(players[1].health, 80);
+  const stoppedAt = attack.stoppedAt;
+  updateProjectile(attack, players, ATTACK_DURATION);
+  assert.equal(attack.stoppedAt, stoppedAt);
+  assert.equal(players[1].health, 80);
+});
+
+test("eliminated or airborne targets are ignored until the shot reaches the boundary", () => {
   const players = [blue(), red(0, 0), red(2, 0)];
   players[1].eliminated = true;
   players[2].position.z = 3;
   const attack = createAttack(0, players, parseEquation("0"), 0);
   updateProjectile(attack, players, 2);
-  assert.equal(attack.age, ATTACK_DURATION);
+  assert.equal(attack.age, 2);
+  assert.equal(attack.reason, "Map boundary");
   assert.ok(players.every((p) => p.health === 100));
 });
 

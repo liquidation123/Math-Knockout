@@ -110,7 +110,7 @@ export function updateRound(round, dt) {
     if (round.attack.stopped) round.message = round.attack.reason + ".";
     checkEliminations(round);
     if (round.result) return;
-    if (round.attack.age >= ATTACK_DURATION) {
+    if (round.attack.stopped && round.attack.age - round.attack.stoppedAt >= ATTACK_DURATION) {
       round.attack = null;
       round.currentTeam = 1 - round.currentTeam;
       round.message = TEAM_NAMES[round.currentTeam] + "'s turn. Choose a surviving character.";

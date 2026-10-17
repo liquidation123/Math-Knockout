@@ -184,6 +184,7 @@ if (typeof document !== 'undefined') {
   buttons.forEach(button => button.addEventListener('click', () => {
     if (locked) return;
     tool = button.dataset.tool;
+    canvas.dataset.tool = tool;
     buttons.forEach(item => {
       const selected = item === button;
       item.classList.toggle('selected', selected);

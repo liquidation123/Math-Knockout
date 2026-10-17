@@ -23,6 +23,8 @@ button:focus-visible, a:focus-visible, canvas:focus-visible { outline: 4px solid
 .timer strong { min-width: 68px; font-size: 62px; line-height: 1; font-weight: 900; font-style: italic; letter-spacing: -.07em; }
 .drawing-frame { grid-column: 2; padding: 15px; border: 7px solid #062758; background: #fff; box-shadow: 0 10px 0 #062c69a1, 0 18px 28px #062a5960; border-radius: 5px; }
 canvas { display: block; width: 100%; height: auto; aspect-ratio: 18 / 11; cursor: crosshair; touch-action: none; background-color: #fff; background-image: linear-gradient(#dfeaf6 1px, transparent 1px), linear-gradient(90deg, #dfeaf6 1px, transparent 1px); background-size: calc(100% / 11) calc(100% / 7); border: 1px solid #d8e4ef; border-radius: 3px; }
+canvas[data-tool='pencil']:not(.locked) { cursor: url('/assets/pencil-cursor.svg') 3 29, crosshair; }
+canvas[data-tool='fill']:not(.locked) { cursor: cell; }
 canvas.locked { cursor: default; }
 .ink-area { justify-self: start; align-self: start; margin-top: 24px; display: flex; align-items: flex-start; gap: 0; }
 .vial { width: 138px; height: 420px; display: flex; align-items: center; flex-direction: column; filter: drop-shadow(0 10px 0 #07396a80); }
