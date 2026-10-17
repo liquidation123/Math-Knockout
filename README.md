@@ -14,9 +14,9 @@ Two equation-combat modes share one mountain summit. Projectile Duel uses team p
   character on the mountain wins; simultaneous falls are a draw.
 
 The homepage has both choices. Each can go through the same 10-second drawing
-screen or use the **Play with cubes** shortcut. A drawing becomes a visual
-decoration on Projectile Duel's cubes (no physics changes); Bump Duel keeps its
-drawn silhouette and ink-based mass/radius. **Change mode** returns home.
+screen or use the **Play with cubes** shortcut. Saved drawings appear as
+team-colored characters in both modes. Projectile Duel keeps its original
+collider and mass; Bump Duel keeps its ink-based mass/radius. **Change mode** returns home.
 Entering either page starts fresh gameplay; drawings remain available in the
 tab's session storage. No combat state is shared between the two entry points.
 Older mountain invite links using `/play.html?room=...` redirect to Bump Duel
@@ -69,7 +69,7 @@ Open the printed address (normally `http://127.0.0.1:5173`) and choose a mode. F
 - The dotted line shows the path and projected stop **without another player's collision**. Hidden opposing input means an exact collision point cannot be predicted before launch.
 - Each player locks one equation. The server reveals only whether each player is ready, then starts a shared 3-second countdown. Both launch on the same server tick.
 - Launch speed starts at 10 units/second and loses 4 units/second² through friction. The unobstructed travel distance is about `10² / (2 × 4) = 12.5` world units. A collision gives equal and opposite impulses; mass determines the resulting velocity change. A miss normally stops on the summit.
-- A saved drawing is reduced to a 128-by-80 alpha mask. The server counts filled pixels to derive approximate mass and collision radius; more ink gives more weight and a larger hit region. Each browser renders the opponent's mask as a vertical silhouette. An absent drawing uses a cube.
+- A saved drawing is reduced to a 128-by-80 alpha mask. The server counts filled pixels to derive approximate mass and collision radius; more ink gives more weight and a larger hit region. Each browser renders the drawing on a camera-facing character badge that follows the physics actor. An absent drawing uses a cube.
 - If both players survive, they choose again from their new positions. The last one on the summit wins; simultaneous falls are a draw.
 
 ## Main files
