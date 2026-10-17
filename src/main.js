@@ -152,11 +152,11 @@ function animate(timestamp) {
   takeFixedSteps(clock, seconds, updateSimulation);
   drawAttack();
   refreshPreview();
+  view.updateCinematic(round.attack, seconds, povToggle.checked);
   const selectedIndex = !round.result ? round.selected[round.currentTeam] : null;
   view.drawGrid(round.players, selectedIndex);
   view.drawPlayers(round.players, selectedIndex);
   view.drawProjectile(round.attack);
-  view.updateCinematic(round.attack, seconds, povToggle.checked);
   view.updateEffects(seconds);
   updateReadout();
   view.render();
