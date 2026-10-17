@@ -3,60 +3,55 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Out-Mathed</title>
+    <meta name="theme-color" content="#1686d8">
+    <meta name="description" content="Out-Mathed is a local two-player equation battle. Shape your shot, hit your rivals, and be the last team standing.">
+    <title>Out-Mathed — Every curve counts</title>
     <link rel="icon" href="data:,">
+    <link rel="preload" href="/assets/hero-landscape.jpg" as="image">
     <link rel="stylesheet" href="/style.css">
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "/node_modules/three/build/three.module.js",
-          "math-expression-evaluator": "/src/math-parser-browser.js"
-        }
-      }
-    </script>
   </head>
   <body>
-    <main>
-      <section id="arena" aria-label="3D combat arena"></section>
+    <main class="home">
+      <div class="landscape" aria-hidden="true"></div>
+      <div class="sky-shade" aria-hidden="true"></div>
 
-      <header id="hud" class="panel">
-        <div class="title-row">
-          <h1>Out-Mathed</h1>
-          <button id="restart" type="button">New round</button>
-        </div>
-        <section class="teams" aria-label="Team health">
-          <div class="team blue">
-            <div class="team-heading"><strong>Blue</strong><span id="blue-stats">3/3 surviving</span></div>
-            <progress id="blue-health" max="300" value="300" aria-label="Blue team health"></progress>
-            <span id="blue-characters" class="character-list"></span>
-          </div>
-          <div class="team red">
-            <div class="team-heading"><strong>Red</strong><span id="red-stats">3/3 surviving</span></div>
-            <progress id="red-health" max="300" value="300" aria-label="Red team health"></progress>
-            <span id="red-characters" class="character-list"></span>
-          </div>
-        </section>
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="Out-Mathed home">
+          <span class="brand-mark" aria-hidden="true">∑</span>
+          <span>OUT-MATHED</span>
+        </a>
+        <button class="guide-trigger" id="guide-trigger" type="button">How to play <span aria-hidden="true">↗</span></button>
       </header>
 
-      <section id="controls" class="panel" aria-label="Equation controls">
-        <div class="turn-row"><strong id="turn">Blue's turn</strong><span id="caster"></span></div>
-        <div class="equation-row">
-          <label for="expression">y =</label>
-          <input id="expression" type="text" value="0" maxlength="200"
-            spellcheck="false" autocomplete="off" aria-describedby="equation-help equation-error">
-          <button id="fire" type="button">Fire</button>
-        </div>
-        <p id="equation-error" role="status"></p>
-        <p id="equation-help">Click a teammate to select. Preview, then Fire. Characters move only through knockback.</p>
-        <p class="anchoring-help">Curves shift automatically to start at your character (0, 0). One grid square = one unit.</p>
-        <p class="examples">Try (x-1)^2 + 1 · e^x · 2sin(1/2 x) - 1 · Trigonometry uses radians.</p>
-        <p id="status" role="status"></p>
-        <div id="result" hidden>
-          <strong id="winner"></strong>
-          <span id="finish-reason"></span>
-        </div>
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> THE EQUATION ARENA <span class="eyebrow-line" aria-hidden="true"></span></p>
+        <h1 id="hero-title">out-mathed</h1>
+        <p class="tagline">Plot a path. Land a hit. Be the last team standing.</p>
+        <a class="play-button" href="/play.html"><span>PLAY</span><span class="play-arrow" aria-hidden="true">↗</span></a>
+        <p class="play-note">2 PLAYERS <span aria-hidden="true">·</span> ONE SCREEN <span aria-hidden="true">·</span> ALL BRAINS</p>
       </section>
+
+      <footer class="site-footer">
+        <span>MAKE EVERY CURVE COUNT</span>
+        <span>BLUE <span class="versus">VS</span> RED <span class="footer-star" aria-hidden="true">✳</span> LAST TEAM STANDING WINS</span>
+      </footer>
     </main>
-    <script type="module" src="/src/main.js"></script>
+
+    <dialog class="guide" id="guide" aria-labelledby="guide-title">
+      <form method="dialog"><button class="guide-close" aria-label="Close how to play" type="submit">×</button></form>
+      <p class="guide-kicker">THE SHORT VERSION</p>
+      <h2 id="guide-title">How to play</h2>
+      <ol>
+        <li><span>01</span><div><strong>Choose a cube</strong><p>Blue and Red take turns. Click one of your surviving teammates.</p></div></li>
+        <li><span>02</span><div><strong>Write an equation</strong><p>Your curve becomes the path of your shot. Preview it, then fire.</p></div></li>
+        <li><span>03</span><div><strong>Knock them out</strong><p>Hit rivals and push them off the arena. Eliminate the whole team to win.</p></div></li>
+      </ol>
+      <a class="guide-play" href="/play.html">LET'S PLAY <span aria-hidden="true">↗</span></a>
+    </dialog>
+    <script>
+      const guide = document.querySelector('#guide');
+      document.querySelector('#guide-trigger').addEventListener('click', () => guide.showModal());
+      guide.addEventListener('click', (event) => { if (event.target === guide) guide.close(); });
+    </script>
   </body>
 </html>
