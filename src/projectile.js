@@ -22,6 +22,7 @@ export function createAttack(attackerIndex, players, equation, time, preview = n
     didHit: false,
     stopped: false,
     reason: "",
+    impactPoint: null,
   };
 }
 
@@ -107,6 +108,7 @@ function travelSegment(attack, end, players) {
   if (!collision) return;
   attack.stopped = true;
   attack.reason = collision.reason;
+  attack.impactPoint = { ...attack.position };
   if (collision.playerIndex !== null && collision.playerIndex !== undefined) {
     const target = players[collision.playerIndex];
     target.health = Math.max(0, target.health - DAMAGE);

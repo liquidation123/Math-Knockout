@@ -24,6 +24,7 @@ test("a fast projectile damages only the first enemy, once, and ignores teammate
   assert.ok(players.every((p) => p.health === 100));
   updateProjectile(attack, players, 0.5);
   assert.equal(attack.reason, "Enemy hit");
+  assert.deepEqual(attack.impactPoint, attack.position);
   assert.equal(players[2].health, 80);
   assert.equal(players[1].health, 100);
   assert.equal(players[3].health, 100);
@@ -39,6 +40,7 @@ test("an obstacle blocks an enemy behind it, while a nearer enemy is hit first",
   let attack = createAttack(0, players, parseEquation("0"), 0);
   updateProjectile(attack, players, 0.6);
   assert.equal(attack.reason, "Obstacle");
+  assert.deepEqual(attack.impactPoint, attack.position);
   close(attack.position.x, -4 - PROJECTILE_RADIUS);
   assert.equal(players[1].health, 100);
 

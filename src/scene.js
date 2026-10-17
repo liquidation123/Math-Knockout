@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ARENA, PLAYER_SIZE, OBSTACLES } from "./physics.js";
 import { PROJECTILE_RADIUS } from "./projectile.js";
 import { buildCartesianGrid, coordinateText } from "./grid.js";
+import { effectKind, pathLookAhead } from "./cinematic.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -29,7 +30,18 @@ export function createView(container, hud, controls) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x152032);
 
-  const camera = createCamera();
+  const birdCamera = createCamera();
+  // An orthographic POV keeps the same mathematical scale as the bird's-eye map.
+  const povCamera = new THREE.OrthographicCamera(-8, 8, 5, -5, 0.1, 100);
+  povCamera.up.set(0, 0, 1);
+  let activeCamera = birdCamera;
+  let cinematicMode = "bird";
+  let cinematicAttack = null;
+  let cinematicTimer = 0;
+  let impactPoint = null;
+  let trailAttack = null;
+  let trailPoints = [];
+  const effects = [];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -116,7 +128,7 @@ export function createView(container, hud, controls) {
   let ticks = [];
 
   function positionLabel(label, point) {
-    const projected = new THREE.Vector3(point.x, point.y, 0).project(camera);
+    const projected = new THREE.Vector3(point.x, point.y, 0).project(birdCamera);
     const x = (projected.x + 1) * container.clientWidth / 2;
     label.style.left = label.classList.contains("coordinate-label")
       ? Math.max(68, Math.min(container.clientWidth - 68, x)) + "px" : x + "px";
@@ -126,8 +138,8 @@ export function createView(container, hud, controls) {
   function drawGrid(players, selectedIndex) {
     const shooter = players[selectedIndex];
     const visible = Boolean(shooter && !shooter.eliminated);
-    gridLines.visible = gridAxes.visible = visible;
-    labels.hidden = !visible;
+    gridLines.visible = gridAxes.visible = visible && activeCamera === birdCamera;
+    labels.hidden = !visible || activeCamera !== birdCamera;
     if (!visible) return;
     const origin = shooter.position;
     const key = origin.x + "," + origin.y;
@@ -209,6 +221,13 @@ export function createView(container, hud, controls) {
   projectile.renderOrder = 4;
   projectile.visible = false;
   scene.add(projectile);
+  const trail = new THREE.Line(
+    new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.8, depthTest: false }),
+  );
+  trail.renderOrder = 3;
+  trail.visible = false;
+  scene.add(trail);
 
   function drawPlayers(players, selectedIndex = null) {
     playerMeshes.forEach((mesh, index) => {
@@ -224,7 +243,200 @@ export function createView(container, hud, controls) {
 
   function drawProjectile(attack) {
     projectile.visible = Boolean(attack);
-    if (attack) projectile.position.set(attack.position.x, attack.position.y, attack.position.z);
+    trail.visible = Boolean(attack);
+    if (!attack) {
+      trailAttack = null;
+      trailPoints = [];
+      return;
+    }
+    projectile.position.set(attack.position.x, attack.position.y, attack.position.z);
+    if (attack !== trailAttack) {
+      trailAttack = attack;
+      trailPoints = [];
+    }
+    const last = trailPoints[trailPoints.length - 1];
+    if (!last || last.distanceTo(projectile.position) > 0.03) {
+      trailPoints.push(projectile.position.clone());
+      if (trailPoints.length > 12) trailPoints.shift();
+      if (trailPoints.length >= 2) trail.geometry.setFromPoints(trailPoints);
+    }
+  }
+
+  function smoothCamera(desiredPosition, target, amount) {
+    povCamera.position.lerp(desiredPosition, amount);
+    // Recompute the look direction after the smoothed position update.
+    povCamera.lookAt(target);
+  }
+
+  function projectileViewTarget(attack, atImpact = false) {
+    const point = atImpact && impactPoint ? impactPoint : attack.position;
+    const look = pathLookAhead(attack.path, point, attack.segment, 3);
+    const forward = new THREE.Vector3(look.forward.x, look.forward.y, 0);
+    const target = new THREE.Vector3(look.target.x, look.target.y, 0.35);
+    // Stay above the shared XY plane so the obstacle layout remains readable.
+    const desired = new THREE.Vector3(point.x, point.y, 6);
+    desired.addScaledVector(forward, -1.6);
+    if (atImpact) desired.z = 8;
+    return { desired, target };
+  }
+
+  function beginProjectilePOV(attack) {
+    if (!attack) return;
+    cinematicAttack = attack;
+    cinematicMode = "transition";
+    cinematicTimer = 0;
+    impactPoint = null;
+    activeCamera = povCamera;
+    povCamera.position.copy(birdCamera.position);
+    povCamera.quaternion.copy(birdCamera.quaternion);
+  }
+
+  function notifyProjectileStopped(attack) {
+    if (!attack || attack !== cinematicAttack) return;
+    const kind = effectKind(attack.reason);
+    if (kind) {
+      impactPoint = attack.impactPoint || attack.position;
+      cinematicMode = "impact";
+      cinematicTimer = 0;
+    } else {
+      cinematicMode = "return";
+      cinematicTimer = 0;
+    }
+  }
+
+  function finishProjectilePOV() {
+    if (activeCamera === birdCamera) return;
+    cinematicMode = "return";
+    cinematicTimer = 0;
+  }
+
+  function setProjectilePOVEnabled(enabled) {
+    if (!enabled) {
+      activeCamera = birdCamera;
+      cinematicMode = "bird";
+      cinematicAttack = null;
+      impactPoint = null;
+      trail.visible = false;
+    } else if (cinematicAttack) {
+      beginProjectilePOV(cinematicAttack);
+    }
+  }
+
+  function resetCinematic() {
+    activeCamera = birdCamera;
+    cinematicMode = "bird";
+    cinematicAttack = null;
+    impactPoint = null;
+    trailAttack = null;
+    trailPoints = [];
+    trail.visible = false;
+    clearEffects();
+  }
+
+  function updateCinematic(attack, dt, enabled) {
+    if (!enabled) return;
+    if (attack && attack !== cinematicAttack) beginProjectilePOV(attack);
+    if (!cinematicAttack) return;
+    if (cinematicMode === "impact") {
+      cinematicTimer += dt;
+      const view = projectileViewTarget(cinematicAttack, true);
+      smoothCamera(view.desired, view.target, 1 - Math.exp(-dt * 10));
+      if (cinematicTimer > 0.3) {
+        cinematicMode = "return";
+        cinematicTimer = 0;
+      }
+      return;
+    }
+    if (cinematicMode === "return") {
+      cinematicTimer += dt;
+      smoothCamera(birdCamera.position, new THREE.Vector3(0, 0, 0), 1 - Math.exp(-dt * 7));
+      if (cinematicTimer > 0.35) {
+        activeCamera = birdCamera;
+        cinematicMode = "bird";
+        cinematicAttack = null;
+        impactPoint = null;
+      }
+      return;
+    }
+    if (!attack || attack.stopped) return;
+    const view = projectileViewTarget(attack);
+    smoothCamera(view.desired, view.target, 1 - Math.exp(-dt * 8));
+    cinematicMode = "projectile";
+  }
+
+  function createImpact(reason, point) {
+    const kind = effectKind(reason);
+    if (!kind || !point) return;
+    const enemy = kind === "enemy";
+    const color = enemy ? 0x9fffea : 0xffa34f;
+    const group = new THREE.Group();
+    group.position.set(point.x, point.y, point.z || 0.5);
+    const flash = new THREE.Mesh(
+      new THREE.SphereGeometry(enemy ? 0.28 : 0.18, 12, 8),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, depthTest: false }),
+    );
+    group.add(flash);
+    let ring = null;
+    if (enemy) {
+      ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.18, 0.25, 24),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }),
+      );
+      ring.position.z = 0.05;
+      group.add(ring);
+    }
+    const particles = [];
+    const count = enemy ? 12 : 7;
+    for (let index = 0; index < count; index += 1) {
+      const angle = index / count * Math.PI * 2;
+      const speed = (enemy ? 2.2 : 1.5) * (0.75 + (index % 3) * 0.12);
+      const particle = new THREE.Mesh(
+        new THREE.SphereGeometry(enemy ? 0.055 : 0.045, 6, 6),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, depthTest: false }),
+      );
+      group.add(particle);
+      particles.push({ mesh: particle, velocity: new THREE.Vector3(Math.cos(angle) * speed, Math.sin(angle) * speed, 0.5 + (index % 2) * 0.4) });
+    }
+    group.renderOrder = 6;
+    scene.add(group);
+    effects.push({ group, flash, ring, particles, age: 0, duration: enemy ? 0.5 : 0.32 });
+  }
+
+  function updateEffects(dt) {
+    for (let index = effects.length - 1; index >= 0; index -= 1) {
+      const effect = effects[index];
+      effect.age += dt;
+      const progress = Math.min(1, effect.age / effect.duration);
+      effect.flash.scale.setScalar(1 + progress * (effect.ring ? 2.5 : 1.3));
+      effect.flash.material.opacity = 1 - progress;
+      if (effect.ring) {
+        effect.ring.scale.setScalar(1 + progress * 4);
+        effect.ring.material.opacity = 0.9 * (1 - progress);
+      }
+      effect.particles.forEach((particle) => {
+        particle.mesh.position.addScaledVector(particle.velocity, dt);
+        particle.velocity.z -= 3 * dt;
+        particle.mesh.material.opacity = 1 - progress;
+      });
+      if (progress >= 1) {
+        scene.remove(effect.group);
+        effect.group.traverse((object) => {
+          if (object.geometry) object.geometry.dispose();
+          if (object.material) object.material.dispose();
+        });
+        effects.splice(index, 1);
+      }
+    }
+  }
+
+  function clearEffects() {
+    effects.splice(0).forEach((effect) => {
+      scene.remove(effect.group);
+      effect.group.traverse((object) => {
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) object.material.dispose();
+      });
+    });
   }
 
   function onCharacterClick(select) {
@@ -235,7 +447,8 @@ export function createView(container, hud, controls) {
         (event.clientX - rect.left) / rect.width * 2 - 1,
         -(event.clientY - rect.top) / rect.height * 2 + 1,
       );
-      raycaster.setFromCamera(point, camera);
+      if (activeCamera !== birdCamera) return;
+      raycaster.setFromCamera(point, birdCamera);
       const hit = raycaster.intersectObjects(playerMeshes.filter((mesh) => mesh.visible), false)[0];
       if (hit) select(hit.object.userData.playerIndex);
       renderer.domElement.focus({ preventScroll: true });
@@ -277,7 +490,13 @@ export function createView(container, hud, controls) {
     const width = container.clientWidth;
     const height = container.clientHeight;
     const aspect = width / height;
-    frameCamera(camera, aspect, (hud.offsetHeight + 24) / height, (controls.offsetHeight + 24) / height);
+    frameCamera(birdCamera, aspect, (hud.offsetHeight + 24) / height, (controls.offsetHeight + 24) / height);
+    const povHalfHeight = 5;
+    povCamera.left = -povHalfHeight * aspect;
+    povCamera.right = povHalfHeight * aspect;
+    povCamera.top = povHalfHeight;
+    povCamera.bottom = -povHalfHeight;
+    povCamera.updateProjectionMatrix();
     renderer.setSize(width, height);
   }
 
@@ -293,6 +512,14 @@ export function createView(container, hud, controls) {
     onCharacterClick,
     drawCurve,
     removeCurve,
-    render: () => renderer.render(scene, camera),
+    beginProjectilePOV,
+    notifyProjectileStopped,
+    finishProjectilePOV,
+    setProjectilePOVEnabled,
+    resetCinematic,
+    updateCinematic,
+    createImpact,
+    updateEffects,
+    render: () => renderer.render(scene, activeCamera),
   };
 }

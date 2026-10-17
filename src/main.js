@@ -10,6 +10,7 @@ const status = document.querySelector("#status");
 const expression = document.querySelector("#expression");
 const fire = document.querySelector("#fire");
 const errorLabel = document.querySelector("#equation-error");
+const povToggle = document.querySelector("#projectile-pov");
 let round;
 let clock;
 let previousTime;
@@ -19,12 +20,15 @@ let previewCurve = null;
 let preview = null;
 let previewKey = "";
 let reportedEliminations = new Set();
+let observedAttack = null;
 
 function resetRound() {
   round = createRound();
   clock = { accumulator: 0 };
   previousTime = undefined;
   reportedEliminations = new Set();
+  observedAttack = null;
+  view.resetCinematic();
   if (activeCurve) view.removeCurve(activeCurve);
   if (previewCurve) view.removeCurve(previewCurve);
   activeCurve = null;
@@ -58,6 +62,9 @@ expression.addEventListener("change", () => {
   if (preview?.error) console.warn("Equation rejected:", preview.error);
 });
 document.querySelector("#restart").addEventListener("click", resetRound);
+povToggle.addEventListener("change", () => {
+  view.setProjectilePOVEnabled(povToggle.checked);
+});
 view.onCharacterClick((index) => {
   if (round.result) return;
   if (selectCharacter(round, index)) {
@@ -83,7 +90,15 @@ function updateSimulation(dt) {
   const attack = round.attack;
   const wasStopped = attack?.stopped;
   updateRound(round, dt);
+  if (round.attack && round.attack !== observedAttack) {
+    observedAttack = round.attack;
+    if (povToggle.checked) view.beginProjectilePOV(round.attack);
+  }
   if (attack?.stopped && !wasStopped) console.info("Projectile stopped:", attack.reason);
+  if (attack?.stopped && !wasStopped) {
+    view.createImpact(attack.reason, attack.impactPoint || attack.position);
+    view.notifyProjectileStopped(attack);
+  }
   round.players.forEach((player, index) => {
     if (player.eliminated && !reportedEliminations.has(index)) {
       reportedEliminations.add(index);
@@ -92,6 +107,10 @@ function updateSimulation(dt) {
   });
   if (round.result) console.info("Round complete", round.result);
   else if (teamBefore !== round.currentTeam) console.info("Turn:", TEAM_NAMES[round.currentTeam]);
+  if (!round.attack && observedAttack) {
+    view.finishProjectilePOV();
+    observedAttack = null;
+  }
 }
 
 function updateReadout() {
@@ -137,6 +156,8 @@ function animate(timestamp) {
   view.drawGrid(round.players, selectedIndex);
   view.drawPlayers(round.players, selectedIndex);
   view.drawProjectile(round.attack);
+  view.updateCinematic(round.attack, seconds, povToggle.checked);
+  view.updateEffects(seconds);
   updateReadout();
   view.render();
   requestAnimationFrame(animate);
