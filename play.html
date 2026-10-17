@@ -40,13 +40,64 @@
 
       <section id="controls" class="panel" aria-label="Equation controls">
         <div class="turn-row"><strong id="turn">Blue's turn</strong><span id="caster"></span></div>
-        <div class="equation-row">
-          <label for="expression">y =</label>
-          <input id="expression" type="text" value="0" maxlength="200"
-            spellcheck="false" autocomplete="off" aria-describedby="equation-help equation-error">
+        <div class="equation-row type-row">
+          <label for="equation-type">Equation type</label>
+          <select id="equation-type">
+            <option value="explicit">Explicit: y = f(x)</option>
+            <option value="parametric">Parametric: x(t), y(t)</option>
+            <option value="polar">Polar: r = f(θ)</option>
+            <option value="implicit">Implicit: F(x,y) = 0</option>
+          </select>
           <button id="fire" type="button">Fire</button>
         </div>
+        <div data-equation-type="explicit">
+          <div class="equation-row">
+            <label for="expression">y =</label>
+            <input id="expression" class="math-input" type="text" value="0" maxlength="200"
+              spellcheck="false" autocomplete="off" aria-describedby="equation-help equation-error">
+          </div>
+        </div>
+        <div data-equation-type="parametric" hidden>
+          <div class="parameter-fields">
+          <label class="equation-row" for="parameter-x">x(t) = <input id="parameter-x" class="math-input" value="3cos(t)" maxlength="200" spellcheck="false"></label>
+          <label class="equation-row" for="parameter-y">y(t) = <input id="parameter-y" class="math-input" value="3sin(t)" maxlength="200" spellcheck="false"></label>
+          </div>
+          <div class="bounds-row">
+            <label for="parameter-start">t start <input id="parameter-start" class="math-input" value="0" maxlength="200"></label>
+            <label for="parameter-end">t end <input id="parameter-end" class="math-input" value="2π" maxlength="200"></label>
+          </div>
+        </div>
+        <div data-equation-type="polar" hidden>
+          <label class="equation-row" for="polar-radius">r(θ) = <input id="polar-radius" class="math-input" value="3" maxlength="200" spellcheck="false"></label>
+          <div class="bounds-row">
+            <label for="polar-start">θ start <input id="polar-start" class="math-input" value="0" maxlength="200"></label>
+            <label for="polar-end">θ end <input id="polar-end" class="math-input" value="2π" maxlength="200"></label>
+          </div>
+        </div>
+        <div id="circle-options" class="symbol-row" hidden>
+          <span>Standard circle:</span>
+          <button type="button" data-circle-direction="1">↺ CCW</button>
+          <button type="button" data-circle-direction="-1">↻ CW</button>
+        </div>
+        <div data-equation-type="implicit" hidden>
+          <label class="equation-row" for="implicit-expression">F = 0 / equation <input id="implicit-expression" class="math-input" value="x^2+y^2=9" maxlength="200" spellcheck="false"></label>
+          <div id="implicit-options" class="bounds-row">
+            <label for="curve-branch">Branch <select id="curve-branch"></select></label>
+            <label for="curve-direction">Direction <select id="curve-direction"><option value="forward">↺ CCW</option><option value="reverse">↻ CW</option></select></label>
+            <label id="cardinal-label" for="launch-cardinal">Start <select id="launch-cardinal"><option value="right">Rightmost</option><option value="top">Topmost</option><option value="left">Leftmost</option><option value="bottom">Bottommost</option><option value="custom">Picked point</option></select></label>
+          </div>
+          <label class="launch-row" for="launch-point">Launch point <input id="launch-point" type="range" min="0" max="1" value="0" step="1"></label>
+          <p class="examples">Gray = available branches. White = firing path. Click a curve or use the slider to choose its launch point; it then shifts onto your character.</p>
+        </div>
+        <div id="symbols" class="symbol-row" aria-label="Insert mathematical symbols">
+          <button type="button" data-symbol="θ" aria-label="Insert theta">θ</button>
+          <button type="button" data-symbol="π" aria-label="Insert pi">π</button>
+          <button type="button" data-symbol="^" aria-label="Insert power">^</button>
+          <button type="button" data-symbol="*" aria-label="Insert multiplication">×</button>
+          <button type="button" data-symbol="/" aria-label="Insert division">÷</button>
+        </div>
         <p id="equation-error" role="status"></p>
+        <p id="curve-note" class="examples" role="status"></p>
         <div class="force-row">
           <label for="force">Force</label>
           <input id="force" type="range" min="0.5" max="3" step="0.1" value="1">
@@ -54,7 +105,11 @@
         </div>
         <p id="equation-help">Click a teammate to select. Higher Force increases knockback and recoil. Preview, then Fire.</p>
         <p class="anchoring-help">Curves shift automatically to start at your character (0, 0). One grid square = one unit.</p>
-        <p class="examples">Try (x-1)^2 + 1 · e^x · 2sin(1/2 x) - 1 · Trigonometry uses radians.</p>
+        <details class="syntax-help"><summary>Syntax &amp; numerical limits (radians)</summary>
+          <p>Use sin, cos, tan, asin, acos, atan, sqrt, abs, exp, ln (natural log), log (base 10), e, pi/π, and theta/θ. Examples: 2sin(t), 2π, 3cos(θ). Use * between named variables. No inequalities, derivatives, complex values, or arbitrary code.</p>
+          <p>Explicit: x in [−32,32]. Parameter paths: 1,280 steps, finite bounds within ±1000, span ≤128π; start must be defined. Closed paths stop after one loop. Circle buttons set end = start ±2π (standard cos/sin circles); the start field sets the starting angle. Other curves follow start → end.</p>
+          <p>Implicit: numerical contours on a 0.25-unit grid in [−16,16]², at most 12,000 segments / 128 branches. Small loops, isolated points, repeated-factor zeros and high-frequency features may be missed. Junctions end branches. Discontinuity checks are numerical, not a proof of continuity; paths stop at detected breaks or the arena edge.</p>
+        </details>
         <label class="pov-toggle"><input id="projectile-pov" type="checkbox" checked> Projectile camera</label>
         <p id="status" role="status"></p>
         <div id="result" hidden>

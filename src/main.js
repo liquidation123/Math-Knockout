@@ -1,5 +1,5 @@
 import { createVictoryScreen } from "./victory.js";
-import { buildPreview } from "./equations.js";
+import { createEquationInput } from "./curve-input.js";
 import { createView } from "./scene.js";
 import { takeFixedSteps } from "./physics.js";
 import { createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES } from "./combat.js";
@@ -33,10 +33,12 @@ let previousTime;
 let activeCurve = null;
 let drawnAttack = null;
 let previewCurve = null;
+let branchCurve = null;
 let preview = null;
 let previewKey = "";
 let reportedEliminations = new Set();
 let observedAttack = null;
+const equationInput = createEquationInput(() => { previewKey = ""; refreshPreview(); });
 
 function resetRound() {
   round = createRound();
@@ -47,9 +49,11 @@ function resetRound() {
   view.resetCinematic();
   if (activeCurve) view.removeCurve(activeCurve);
   if (previewCurve) view.removeCurve(previewCurve);
+  if (branchCurve) view.removeCurve(branchCurve);
   activeCurve = null;
   drawnAttack = null;
   previewCurve = null;
+  branchCurve = null;
   previewKey = "";
   document.querySelector("#result").hidden = true;
   victory.hide();
@@ -64,22 +68,21 @@ function refreshPreview() {
   const index = round.selected[round.currentTeam];
   const player = round.players[index];
   const origin = player.position;
-  const key = expression.value + "|" + index + "|" + origin.x + "," + origin.y + "|" + Boolean(round.result);
+  const key = equationInput.key() + "|" + index + "|" + origin.x + "," + origin.y + "|" + Boolean(round.result);
   if (key === previewKey) return;
   previewKey = key;
-  preview = round.result ? null : buildPreview(expression.value, origin, player.team === 0 ? 1 : -1);
+  preview = round.result ? null : equationInput.preview(origin, player.team === 0 ? 1 : -1);
   if (previewCurve) view.removeCurve(previewCurve);
+  if (branchCurve) view.removeCurve(branchCurve);
+  branchCurve = preview?.selection ? view.drawCurve(preview.sections, 0x71849e, true) : null;
   previewCurve = preview && !preview.error ? view.drawCurve([preview.path], 0xffffff, true) : null;
-  expression.setAttribute("aria-invalid", String(Boolean(preview?.error)));
+  document.querySelectorAll(".math-input").forEach((input) => input.setAttribute("aria-invalid",
+    String(Boolean(preview?.error) && !input.closest("[data-equation-type]").hidden)));
   errorLabel.textContent = preview?.error || "";
 }
 
-expression.addEventListener("input", refreshPreview);
 forceSlider.addEventListener("input", () => {
   forceValue.textContent = Number(forceSlider.value).toFixed(1) + "×";
-});
-expression.addEventListener("change", () => {
-  if (preview?.error) console.warn("Equation rejected:", preview.error);
 });
 document.querySelector("#restart").addEventListener("click", resetRound);
 povToggle.addEventListener("change", () => {
@@ -94,6 +97,8 @@ view.onCharacterClick((index) => {
   }
   refreshPreview();
   updateReadout();
+}, (point) => {
+  if (!round.result && !round.attack) equationInput.selectPoint(point, preview);
 });
 fire.addEventListener("click", () => {
   refreshPreview();

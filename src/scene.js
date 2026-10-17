@@ -424,7 +424,7 @@ export function createView(container, hud, controls) {
     });
   }
 
-  function onCharacterClick(select) {
+  function onCharacterClick(select, selectCurvePoint) {
     const raycaster = new THREE.Raycaster();
     renderer.domElement.addEventListener("pointerdown", (event) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -436,6 +436,10 @@ export function createView(container, hud, controls) {
       raycaster.setFromCamera(point, birdCamera);
       const hit = raycaster.intersectObjects(playerMeshes.filter((mesh) => mesh.visible), false)[0];
       if (hit) select(hit.object.userData.playerIndex);
+      else if (selectCurvePoint) {
+        const point = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -0.5), new THREE.Vector3());
+        if (point) selectCurvePoint(point);
+      }
       renderer.domElement.focus({ preventScroll: true });
     });
   }
@@ -448,7 +452,7 @@ export function createView(container, hud, controls) {
       );
       const material = preview
         ? new THREE.LineDashedMaterial({
-          color: 0xffffff, dashSize: 0.15, gapSize: 0.12,
+          color, dashSize: 0.15, gapSize: 0.12,
           transparent: true, opacity: 0.6, depthTest: false,
         })
         : new THREE.LineBasicMaterial({ color, depthTest: false });

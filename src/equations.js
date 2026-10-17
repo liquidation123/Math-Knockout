@@ -8,13 +8,15 @@ export const COMBAT_Z = 0.5;
 const parser = new Mexp();
 parser.math.isDegree = false;
 parser.addToken([
-  { token: "x", show: "x", type: Mexp.TOKEN_TYPES.CONSTANT, value: "x" },
+  ...["theta", "x", "y", "t"].map((name) => ({
+    token: name, show: name, type: Mexp.TOKEN_TYPES.CONSTANT, value: name,
+  })),
   ...["sqrt", "abs", "exp", "floor", "ceil", "round"].map((name) => ({
     token: name, show: name, type: Mexp.TOKEN_TYPES.FUNCTION_WITH_ONE_ARG, value: Math[name],
   })),
 ]);
 const names = new Set([
-  "x", "e", "pi", "sin", "cos", "tan", "asin", "acos", "atan",
+  "e", "pi", "sin", "cos", "tan", "asin", "acos", "atan",
   "sinh", "cosh", "tanh", "sqrt", "root", "abs", "exp",
   "ln", "log", "floor", "ceil", "round",
 ]);
@@ -25,15 +27,22 @@ export const EQUATIONS = [
   { name: "y = sin(x)", evaluate: (x) => Math.sin(x), color: 0x76e5c0 },
 ];
 
-export function parseEquation(input) {
-  const expression = input.trim();
-  if (!expression) throw new Error("Enter an expression for f(x).");
+export function normalizeExpression(input) {
+  return input.trim().replaceAll("θ", "theta").replaceAll("π", "pi")
+    .replaceAll("−", "-").replaceAll("×", "*").replaceAll("÷", "/");
+}
+
+export function compileExpression(input, variables = ["x"]) {
+  const expression = normalizeExpression(input);
+  if (!expression) throw new Error("Enter a mathematical expression.");
   if (expression.length > 200) throw new Error("Keep the expression under 200 characters.");
   if (!/^[0-9a-z+\-*/^().\s]+$/.test(expression)) {
-    throw new Error("Use numbers, x, parentheses, powers, and supported math functions.");
+    throw new Error("Use numbers, parentheses, + − * / ^, and supported math names.");
   }
   for (const name of expression.match(/[a-z]+/g) || []) {
-    if (!names.has(name)) throw new Error("Unknown name: " + name + ".");
+    if (!names.has(name) && !variables.includes(name)) {
+      throw new Error("Unknown name: " + name + ". Variables here: " + (variables.join(", ") || "none") + ".");
+    }
   }
   let balance = 0;
   for (const character of expression) {
@@ -46,21 +55,27 @@ export function parseEquation(input) {
   let postfix;
   try {
     postfix = parser.toPostfix(parser.lex(expression));
-    parser.postfixEval(postfix, { x: 0 }); // Also catch incomplete operator syntax.
+    parser.postfixEval(postfix, { x: 0, y: 0, t: 0, theta: 0 });
   } catch {
     throw new Error("Invalid expression. Check the operators and function arguments.");
   }
   return {
-    expression,
-    name: "y = " + expression,
-    color: 0xffcd6b,
-    evaluate(x) {
+    expression: input.trim(),
+    evaluate(values = {}) {
       try {
-        return parser.postfixEval(postfix, { x });
+        return parser.postfixEval(postfix, values);
       } catch {
         return NaN;
       }
     },
+  };
+}
+
+export function parseEquation(input) {
+  const compiled = compileExpression(input, ["x"]);
+  return {
+    expression: input.trim(), name: "y = " + input.trim(), color: 0xffcd6b,
+    evaluate: (x) => compiled.evaluate({ x }),
   };
 }
 
