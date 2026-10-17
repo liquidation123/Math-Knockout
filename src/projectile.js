@@ -1,5 +1,6 @@
 import { COMBAT_Z, buildTrajectory } from "./equations.js";
-import { ARENA, OBSTACLES, PLAYER_SIZE, applyKnockback } from "./physics.js";
+import { OBSTACLES, PLAYER_SIZE, applyKnockback } from "./physics.js";
+import { clipArenaSegment } from "./terrain.js";
 
 export const DAMAGE = 20;
 // Make even the lowest Force visibly move a one-unit cube against ground friction.
@@ -76,17 +77,9 @@ export function segmentBoxHit(start, end, box, padding = 0) {
 }
 
 function boundaryHit(start, end) {
-  let first = null;
-  for (const [axis, half] of [["x", ARENA.halfWidth], ["y", ARENA.depth / 2]]) {
-    const limit = half - PROJECTILE_RADIUS;
-    if (Math.abs(start[axis]) > limit) return 0;
-    const delta = end[axis] - start[axis];
-    let t = null;
-    if (delta > 0 && end[axis] >= limit) t = (limit - start[axis]) / delta;
-    if (delta < 0 && end[axis] <= -limit) t = (-limit - start[axis]) / delta;
-    if (t !== null && (first === null || t < first)) first = t;
-  }
-  return first;
+  const clipped = clipArenaSegment(start, end, PROJECTILE_RADIUS);
+  if (!clipped || clipped.entry > 0) return 0;
+  return clipped.exit < 1 ? clipped.exit : null;
 }
 
 export function firstCollision(start, end, players, attackerIndex, hitEnemies = new Set()) {

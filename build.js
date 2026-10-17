@@ -7,8 +7,8 @@ const output = new URL("./dist/", root);
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 for (const file of [
-  "index.html", "create.html", "play.html", "victory.html",
-  "style.css", "create.css", "game.css", "victory.css", "create.js", "src", "assets",
+  "index.html", "create.html", "play.html", "bump.html", "victory.html",
+  "style.css", "create.css", "game.css", "duel.css", "victory.css", "create.js", "src", "assets",
 ]) {
   await cp(new URL(file, root), new URL(file, output), { recursive: true });
 }
@@ -20,15 +20,21 @@ for (const [source, destination] of [
   ["three/build/three.module.js", "three/three.module.js"],
   ["three/build/three.core.js", "three/three.core.js"],
   ["three/LICENSE", "three/LICENSE"],
+  ["three/examples/jsm/loaders/GLTFLoader.js", "three/addons/loaders/GLTFLoader.js"],
+  ["three/examples/jsm/utils/BufferGeometryUtils.js", "three/addons/utils/BufferGeometryUtils.js"],
+  ["three/examples/jsm/utils/SkeletonUtils.js", "three/addons/utils/SkeletonUtils.js"],
   ["math-expression-evaluator/dist/browser/math-expression-evaluator.min.js", "math-expression-evaluator/math-expression-evaluator.min.js"],
   ["math-expression-evaluator/LICENSE", "math-expression-evaluator/LICENSE"],
 ]) {
   await cp(new URL("node_modules/" + source, root), new URL("vendor/" + destination, output));
 }
 
-const playPage = new URL("play.html", output);
-await writeFile(playPage, (await readFile(playPage, "utf8"))
-  .replace("/node_modules/three/build/three.module.js", "/vendor/three/three.module.js"));
+for (const name of ["play.html", "bump.html"]) {
+  const page = new URL(name, output);
+  await writeFile(page, (await readFile(page, "utf8"))
+    .replace("/node_modules/three/build/three.module.js", "/vendor/three/three.module.js")
+    .replace("/node_modules/three/examples/jsm/", "/vendor/three/addons/"));
+}
 const parser = new URL("src/math-parser-browser.js", output);
 await writeFile(parser, (await readFile(parser, "utf8"))
   .replace("../node_modules/math-expression-evaluator/dist/browser/", "../vendor/math-expression-evaluator/"));

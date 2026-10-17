@@ -1,5 +1,6 @@
+import { ARENA, insideArena } from "./terrain.js";
+export { ARENA, insideArena } from "./terrain.js";
 export const PLAYER_SIZE = 1;
-export const ARENA = { halfWidth: 14, depth: 16, top: 0, thickness: 0.6, fallHeight: -5 };
 export const FIXED_STEP = 1 / 120;
 export const GRAVITY = 12;
 export const GROUND_FRICTION = 4;
@@ -34,19 +35,19 @@ export function createPlayer(name, x, y = 0, z = 3, team = 0) {
   };
 }
 
-export function updatePlayer(player, dt) {
+export function updatePlayer(player, dt, obstacles = OBSTACLES) {
   if (player.eliminated) return;
+  // Older callers passed a movement object here; it must never move the player.
+  if (!Array.isArray(obstacles)) obstacles = OBSTACLES;
   const halfSize = PLAYER_SIZE / 2;
   const previousBottom = player.position.z - halfSize;
   // Only physics velocity moves characters; there is no direct movement input.
-  moveAxis(player, "x", player.velocity.x * dt);
-  moveAxis(player, "y", player.velocity.y * dt);
+  movePlayerXY(player, player.velocity.x * dt, player.velocity.y * dt, obstacles);
   // Z is height. Semi-implicit Euler updates vertical velocity before position.
   player.velocity.z -= GRAVITY * dt;
   player.position.z += player.velocity.z * dt;
 
-  const abovePlatform = Math.abs(player.position.x) <= ARENA.halfWidth &&
-    Math.abs(player.position.y) <= ARENA.depth / 2;
+  const abovePlatform = insideArena(player.position.x, player.position.y);
   const crossedTop = previousBottom >= ARENA.top &&
     player.position.z - halfSize <= ARENA.top;
 
@@ -61,14 +62,19 @@ export function updatePlayer(player, dt) {
   }
 }
 
-function moveAxis(player, axis, amount) {
+export function movePlayerXY(player, dx, dy, obstacles = OBSTACLES) {
+  moveAxis(player, "x", dx, obstacles);
+  moveAxis(player, "y", dy, obstacles);
+}
+
+function moveAxis(player, axis, amount, obstacles) {
   const other = axis === "x" ? "y" : "x";
   const half = PLAYER_SIZE / 2;
   const start = player.position[axis];
   let end = start + amount;
 
   // Sweep one axis at a time: even a large step cannot cross a solid rectangle.
-  for (const obstacle of OBSTACLES) {
+  for (const obstacle of obstacles) {
     const size = axis === "x" ? obstacle.width : obstacle.depth;
     const otherSize = axis === "x" ? obstacle.depth : obstacle.width;
     if (Math.abs(player.position[other] - obstacle[other]) >= otherSize / 2 + half) continue;
