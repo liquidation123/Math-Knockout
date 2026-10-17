@@ -1,6 +1,6 @@
-import { ARENA, createPlayer, updatePlayer } from "./physics.js";
+import { ARENA, applyImpulse, createPlayer, updatePlayer } from "./physics.js";
 import { generateSpawns } from "./spawns.js";
-import { ATTACK_DURATION, createAttack, updateProjectile } from "./projectile.js";
+import { ATTACK_DURATION, DEFAULT_FORCE, RECOIL, createAttack, updateProjectile } from "./projectile.js";
 export { DAMAGE, KNOCKBACK, ATTACK_DURATION, createAttack } from "./projectile.js";
 
 export const TURN_INTERVAL = 1.25;
@@ -37,21 +37,33 @@ export function selectCharacter(round, index) {
   return true;
 }
 
-function startAttack(round, attackerIndex, equation, preview = null) {
-  round.attack = createAttack(attackerIndex, round.players, equation, round.time, preview);
+function applyRecoil(attacker, attack) {
+  const origin = attack.origin;
+  const next = attack.path.find((point) => point.x !== origin.x || point.y !== origin.y);
+  // A one-point curve has no travel direction; use the team's firing direction.
+  const dx = next ? next.x - origin.x : (attacker.team === 0 ? 1 : -1);
+  const dy = next ? next.y - origin.y : 0;
+  const length = Math.hypot(dx, dy);
+  const impulse = RECOIL * attack.force;
+  applyImpulse(attacker, { x: -dx / length * impulse, y: -dy / length * impulse });
+}
+
+function startAttack(round, attackerIndex, equation, preview = null, force = DEFAULT_FORCE) {
+  round.attack = createAttack(attackerIndex, round.players, equation, round.time, preview, force);
+  applyRecoil(round.players[attackerIndex], round.attack);
   round.castCount += 1;
   round.nextCastAt = round.time + TURN_INTERVAL;
   round.message = round.players[attackerIndex].name + " fires " + equation.name + ".";
 }
 
-export function firePreview(round, attackerIndex, preview) {
+export function firePreview(round, attackerIndex, preview, force = DEFAULT_FORCE) {
   const player = round.players[attackerIndex];
   if (round.result || round.attack || round.automatic || !preview || preview.error ||
     !player || player.eliminated || player.health <= 0 || player.team !== round.currentTeam ||
     Math.abs(player.position.z - 0.5) > 0.05 ||
     attackerIndex !== round.selected[round.currentTeam]) return false;
   try {
-    startAttack(round, attackerIndex, preview.equation, preview);
+    startAttack(round, attackerIndex, preview.equation, preview, force);
     return true;
   } catch (error) {
     round.message = error.message;

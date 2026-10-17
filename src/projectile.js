@@ -1,20 +1,30 @@
 import { COMBAT_Z, buildTrajectory } from "./equations.js";
-import { OBSTACLES, PLAYER_SIZE, applyKnockback, insideArena } from "./physics.js";
+import { ARENA, OBSTACLES, PLAYER_SIZE, applyKnockback } from "./physics.js";
 
 export const DAMAGE = 20;
-export const KNOCKBACK = 3.2;
+// Make even the lowest Force visibly move a one-unit cube against ground friction.
+export const KNOCKBACK = 6.4;
+export const RECOIL = 1.6;
+export const MIN_FORCE = 0.5;
+export const MAX_FORCE = 3;
+export const DEFAULT_FORCE = 1;
 // Keep the impact visible briefly; flight itself has no time limit.
 export const ATTACK_DURATION = 0.7;
 export const PROJECTILE_SPEED = 10;
 export const PROJECTILE_RADIUS = 0.12;
 
-export function createAttack(attackerIndex, players, equation, time, preview = null, obstacles = OBSTACLES) {
+export function createAttack(attackerIndex, players, equation, time, preview = null, force = DEFAULT_FORCE) {
   const attacker = players[attackerIndex];
   const trajectory = preview || buildTrajectory(equation, attacker.position, attacker.team === 0 ? 1 : -1);
   const origin = trajectory.origin;
   const path = trajectory.path.map((point) => ({ ...point }));
+  const capturedForce = Number.isFinite(force)
+    ? Math.max(MIN_FORCE, Math.min(MAX_FORCE, force)) : DEFAULT_FORCE;
   return {
-    attackerIndex, equation, path, obstacles,
+    attackerIndex, equation, path,
+    force: capturedForce,
+    hitEnemies: new Set(),
+    hits: [],
     origin: { x: origin.x, y: origin.y, z: COMBAT_Z },
     position: { x: origin.x, y: origin.y, z: COMBAT_Z },
     segment: 1,
@@ -66,31 +76,30 @@ export function segmentBoxHit(start, end, box, padding = 0) {
 }
 
 function boundaryHit(start, end) {
-  if (!insideArena(start.x, start.y, PROJECTILE_RADIUS)) return 0;
-  if (insideArena(end.x, end.y, PROJECTILE_RADIUS)) return null;
-  // The summit is convex: bisect the segment where it crosses its edge.
-  let low = 0, high = 1;
-  for (let i = 0; i < 48; i += 1) {
-    const middle = (low + high) / 2;
-    const x = start.x + (end.x - start.x) * middle;
-    const y = start.y + (end.y - start.y) * middle;
-    if (insideArena(x, y, PROJECTILE_RADIUS)) low = middle;
-    else high = middle;
+  let first = null;
+  for (const [axis, half] of [["x", ARENA.halfWidth], ["y", ARENA.depth / 2]]) {
+    const limit = half - PROJECTILE_RADIUS;
+    if (Math.abs(start[axis]) > limit) return 0;
+    const delta = end[axis] - start[axis];
+    let t = null;
+    if (delta > 0 && end[axis] >= limit) t = (limit - start[axis]) / delta;
+    if (delta < 0 && end[axis] <= -limit) t = (-limit - start[axis]) / delta;
+    if (t !== null && (first === null || t < first)) first = t;
   }
-  return high;
+  return first;
 }
 
-export function firstCollision(start, end, players, attackerIndex, obstacles = OBSTACLES) {
+export function firstCollision(start, end, players, attackerIndex, hitEnemies = new Set()) {
   const boundary = boundaryHit(start, end);
   let first = boundary === null ? null : { t: boundary, reason: "Map boundary" };
   function consider(t, reason, playerIndex = null) {
     if (t !== null && (!first || t < first.t)) first = { t, reason, playerIndex };
   }
-  for (const obstacle of obstacles) {
+  for (const obstacle of OBSTACLES) {
     consider(segmentBoxHit(start, end, obstacle, PROJECTILE_RADIUS), "Obstacle");
   }
   players.forEach((player, index) => {
-    if (player.eliminated || player.team === players[attackerIndex].team) return;
+    if (player.eliminated || player.team === players[attackerIndex].team || hitEnemies.has(index)) return;
     if (Math.abs(player.position.z - COMBAT_Z) > PLAYER_SIZE / 2) return;
     consider(segmentCircleHit(start, end, player.position, PLAYER_SIZE / 2 + PROJECTILE_RADIUS),
       "Enemy hit", index);
@@ -99,23 +108,30 @@ export function firstCollision(start, end, players, attackerIndex, obstacles = O
 }
 
 function travelSegment(attack, end, players) {
-  const start = attack.position;
-  const collision = firstCollision(start, end, players, attack.attackerIndex, attack.obstacles);
-  const t = collision ? collision.t : 1;
-  attack.position = {
-    x: start.x + (end.x - start.x) * t,
-    y: start.y + (end.y - start.y) * t,
-    z: COMBAT_Z,
-  };
-  if (!collision) return;
-  attack.stopped = true;
-  attack.reason = collision.reason;
-  attack.impactPoint = { ...attack.position };
-  if (collision.playerIndex !== null && collision.playerIndex !== undefined) {
+  // Recheck the remaining segment after each enemy, so a nearer wall always wins.
+  while (!attack.stopped) {
+    const start = attack.position;
+    const collision = firstCollision(start, end, players, attack.attackerIndex, attack.hitEnemies);
+    const t = collision ? collision.t : 1;
+    attack.position = {
+      x: start.x + (end.x - start.x) * t,
+      y: start.y + (end.y - start.y) * t,
+      z: COMBAT_Z,
+    };
+    if (!collision) return;
+    if (collision.reason !== "Enemy hit") {
+      attack.stopped = true;
+      attack.reason = collision.reason;
+      attack.impactPoint = { ...attack.position };
+      return;
+    }
+    attack.hitEnemies.add(collision.playerIndex);
     const target = players[collision.playerIndex];
     target.health = Math.max(0, target.health - DAMAGE);
-    applyKnockback(players[attack.attackerIndex], target, KNOCKBACK);
+    applyKnockback(players[attack.attackerIndex], target, KNOCKBACK * attack.force);
     attack.didHit = true;
+    // Save collision points for cosmetic effects; they never apply damage.
+    attack.hits.push({ playerIndex: collision.playerIndex, position: { ...attack.position } });
   }
 }
 

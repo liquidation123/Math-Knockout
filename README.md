@@ -9,7 +9,7 @@ Use Node.js 22 or newer:
     npm install
     npm start
 
-Open `http://127.0.0.1:5173`. PLAY opens the 10-second drawing screen; after it locks, choose **Open arena demo**. Copy the invite link and open it in another browser/tab for Red. Each player can draw on their own device before joining the same room. Run `npm test` for the Node tests. The server binds to localhost by default; set `HOST=0.0.0.0` and `PORT` for a Node host that accepts external connections. A public host/domain is not configured in this repository.
+Open `http://127.0.0.1:5173`. PLAY opens the 10-second drawing screen; after it locks, choose **Open arena demo**. Copy the invite link and open it in another browser/tab for Red. Each player can draw on their own device before joining the same room. Run `npm test` for the Node tests. The server binds to localhost by default; set `HOST=0.0.0.0` and `PORT` for a Node host that accepts external connections. The Vercel static build includes the arena assets, but live rooms need a persistent Node/WebSocket host; the current Vercel deployment cannot run the duel server.
 
 ## Duel rules
 

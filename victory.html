@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Victory preview · Out-Mathed</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/victory.css">
+</head>
+<body>
+  <script type="module">
+    import { createVictoryScreen } from './src/victory.js';
+    // Design preview only. Actual matches pass their live round from main.js.
+    const requested = new URLSearchParams(location.search).get('winner');
+    const winner = ['Blue', 'Red', 'Draw'].includes(requested) ? requested : 'Blue';
+    const teamParam = new URLSearchParams(location.search).get('team');
+    const perspectiveTeam = ['Blue', 'Red'].find((name) => name.toLowerCase() === teamParam?.toLowerCase());
+    const screen = createVictoryScreen(() => { location.href = '/play.html' + (perspectiveTeam ? '?team=' + perspectiveTeam : ''); }, perspectiveTeam);
+    screen.show({
+      result: { winner }, time: 154, castCount: 18,
+      players: [{ team: winner === 'Red' ? 1 : 0, eliminated: false }],
+    });
+  </script>
+</body>
+</html>

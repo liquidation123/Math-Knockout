@@ -80,6 +80,8 @@ test("previews and invalid input cause no attack, damage, or knockback", () => {
 
 test("only the selected current-team character can fire, and damage waits for arrival", () => {
   const round = groundedRound();
+  // Leave enough room for knockback so this fixture can test the enemy's next turn.
+  round.players[4].position.x = 8;
   const preview = previewFor(round);
   assert.equal(firePreview(round, 0, preview), false);
   assert.equal(firePreview(round, 4, preview), false);
@@ -93,7 +95,8 @@ test("only the selected current-team character can fire, and damage waits for ar
   assert.ok(round.players.filter((_, i) => i !== 4).every((p) => p.health === 100));
   assert.ok(round.players[4].velocity.x > 0);
   assert.equal(firePreview(round, 1, preview), false);
-  for (let i = 0; i < 100; i += 1) updateRound(round, FIXED_STEP);
+  // The piercing bullet now continues to the boundary before the usual impact pause.
+  for (let i = 0; i < 160; i += 1) updateRound(round, FIXED_STEP);
   assert.equal(round.attack, null);
   assert.equal(round.currentTeam, 1);
   assert.ok(firePreview(round, 4, previewFor(round)));

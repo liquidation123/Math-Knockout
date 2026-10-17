@@ -1,8 +1,45 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { createCamera, frameCamera } from "../src/scene.js";
+import { createCamera, frameCamera, createProjectileCamera, aimProjectileCamera } from "../src/scene.js";
 import { ARENA } from "../src/physics.js";
+
+test("projectile POV centers the bullet at every turn and keeps the camera level", () => {
+  const camera = createProjectileCamera();
+  assert.ok(camera.isPerspectiveCamera);
+  const path = [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }, { x: -2, y: 2 }];
+  for (const [position, segment] of [
+    [{ x: 0.5, y: 0, z: 0.5 }, 1],
+    [{ x: 2, y: 0.5, z: 0.5 }, 2],
+    [{ x: 0, y: 2, z: 0.5 }, 3],
+  ]) {
+    aimProjectileCamera(camera, { path, position, segment });
+    camera.updateMatrixWorld();
+    const bullet = new THREE.Vector3(position.x, position.y, position.z).project(camera);
+    assert.ok(Math.abs(bullet.x) < 1e-9);
+    assert.ok(Math.abs(bullet.y) < 1e-9);
+    assert.ok(Math.abs(bullet.z) < 1);
+    assert.equal(camera.position.z, position.z);
+    assert.ok(Math.abs(camera.getWorldDirection(new THREE.Vector3()).z) < 1e-9);
+    assert.deepEqual(camera.up.toArray(), [0, 0, 1]);
+  }
+});
+
+test("level projectile perspective shows floor depth and keeps nearby wall faces in view", () => {
+  const camera = createProjectileCamera();
+  aimProjectileCamera(camera, {
+    path: [{ x: 0, y: 0 }, { x: 10, y: 0 }],
+    position: { x: 0, y: 0, z: 0.5 }, segment: 1,
+  });
+  camera.updateMatrixWorld();
+  const nearFloor = new THREE.Vector3(0, 0, 0).project(camera);
+  const farFloor = new THREE.Vector3(4, 0, 0).project(camera);
+  assert.ok(nearFloor.y < farFloor.y && farFloor.y < 0);
+  for (const z of [0, 1]) {
+    const wall = new THREE.Vector3(1, 0, z).project(camera);
+    assert.ok(Math.abs(wall.y) < 1 && Math.abs(wall.z) < 1);
+  }
+});
 
 test("the orthographic camera looks down -Z with +X right and +Y up", () => {
   const camera = createCamera();

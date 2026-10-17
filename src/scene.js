@@ -13,6 +13,18 @@ export function createCamera() {
   return camera;
 }
 
+export function createProjectileCamera() {
+  const camera = new THREE.PerspectiveCamera(65, 1, 0.03, 100);
+  camera.up.set(0, 0, 1);
+  return camera;
+}
+
+export function aimProjectileCamera(camera, attack, point = attack.position) {
+  const look = pathLookAhead(attack.path, point, attack.segment, 3);
+  camera.position.set(point.x - look.forward.x * 1.6, point.y - look.forward.y * 1.6, point.z);
+  camera.lookAt(point.x, point.y, point.z);
+}
+
 export function frameCamera(camera, aspect, topInset = 0, bottomInset = 0) {
   // Insets are fractions of viewport height occupied by the gameplay controls.
   const usableHeight = Math.max(0.1, 1 - topInset - bottomInset);
