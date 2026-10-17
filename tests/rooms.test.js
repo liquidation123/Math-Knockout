@@ -49,6 +49,11 @@ test("mode pages load; Bump restart cancels old countdowns and an empty room sta
   await waitUntil(() => blue.state && red.state);
   assert.equal(blue.state.side, 0);
   assert.equal(red.state.side, 1);
+  const extra = connect();
+  const [closeCode, closeReason] = await once(extra.socket, "close");
+  assert.equal(closeCode, 1008);
+  assert.match(closeReason.toString(), /two players/);
+  assert.equal(extra.state, null, "A full room must never assign a fake side.");
   const initialPositions = blue.state.players.map((player) => player.position);
   const lockBoth = () => [blue, red].forEach((client) => client.socket.send(JSON.stringify({ type: "lock", expression: "0" })));
   lockBoth();

@@ -59,6 +59,10 @@ Keep the terminal running and open the address printed after **Out-Mathed:**.
 Local startup tries ports 5173–5182 if another server is already running.
 An explicit `PORT` is always respected; for example, `PORT=5183 npm start`.
 Press Ctrl+C in that server's terminal to stop it.
+After pulling server changes or switching branches, stop and restart the server.
+An old process can serve new pages while still running the old server code;
+a pre-Bump server cannot assign sides. If Bump shows a connection error, restart
+with `npm start`, open its printed address, and use **Retry**.
 
 Open the printed address (normally `http://127.0.0.1:5173`) and choose a mode. For Bump Duel, copy the invite link into another tab or device for Red. A second device needs a reachable Node server address; localhost refers only to its own computer. Run `npm test` for the Node tests. The server binds to localhost by default; set `HOST=0.0.0.0` and `PORT` for a Node host that accepts external connections. The Vercel static build includes the arena assets, but live rooms need a persistent Node/WebSocket host; the current Vercel deployment cannot run the duel server.
 

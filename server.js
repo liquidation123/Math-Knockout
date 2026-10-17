@@ -78,10 +78,10 @@ function resetRoom(room) {
 
 sockets.on("connection", (socket, request) => {
   const id = new URL(request.url, "http://localhost").searchParams.get("room");
-  if (!/^[a-zA-Z0-9-]{4,32}$/.test(id || "")) return socket.close();
+  if (!/^[a-zA-Z0-9-]{4,32}$/.test(id || "")) return socket.close(1008, "Invalid room link. Return to Change mode and start a new Bump Duel.");
   const room = rooms.get(id) || { clients: [null, null], masks: [null, null], duel: createDuel(), startAt: 0 };
   const side = room.clients.findIndex((client) => !client);
-  if (side < 0) return socket.close();
+  if (side < 0) return socket.close(1008, "This room already has two players. Close an extra tab, then retry.");
   rooms.set(id, room);
   room.clients[side] = socket;
   room.masks.forEach((mask, index) => { if (mask) send(socket, { type: "shape", side: index, mask }); });

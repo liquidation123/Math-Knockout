@@ -11,7 +11,7 @@
 <body>
   <main>
     <section id="arena" aria-label="3D mountain duel"></section>
-    <div id="loading">Loading the summit…</div>
+    <div id="loading" role="status"><span id="loading-message">Connecting to the duel server…</span> <button id="retry" hidden>Retry</button></div>
     <header id="hud" class="panel">
       <div class="brand"><h1>BUMP DUEL <span>OUT-MATHED</span></h1><a class="mode-link" href="/">Change mode</a><button id="invite">Copy invite link</button></div>
       <div class="score"><span id="blue">Blue · waiting</span><strong id="phase">Connecting…</strong><span id="red">Red · waiting</span></div>
@@ -19,11 +19,22 @@
     <div id="countdown" aria-live="assertive" hidden>3</div>
     <section id="controls" class="panel">
       <div class="control-top"><strong id="side">Finding your side…</strong><span id="location">The dotted line is your path if unobstructed.</span></div>
-      <form id="form"><label for="equation">y =</label><input id="equation" value="0" maxlength="200" autocomplete="off" spellcheck="false"><button id="lock" type="submit" disabled>Lock in</button></form>
-      <div class="control-bottom"><span id="error" role="status">Both players choose secretly, then launch together.</span><button id="view">Summit view</button><button id="reset">New duel</button></div>
+      <form id="form"><label for="equation">y =</label><input id="equation" value="0" maxlength="200" autocomplete="off" spellcheck="false" disabled><button id="lock" type="submit" disabled>Lock in</button></form>
+      <div class="control-bottom"><span id="error" role="status">Both players choose secretly, then launch together.</span><button id="view" disabled>Summit view</button><button id="reset" disabled>New duel</button></div>
       <p class="bump-help">Copy the invite into a second tab. Equations move characters, not bullets; contact knocks rivals off. Stone walls stop launches. Click the arena to look around; Esc releases the mouse.</p>
     </section>
   </main>
-  <script type="module" src="/src/duel-client.js"></script>
+  <script type="module">
+    document.querySelector("#retry").addEventListener("click", () => location.reload());
+    // Catch missing modules and renderer failures before the game can initialize.
+    import("/src/duel-client.js").catch((error) => {
+      document.querySelector("#loading").hidden = false;
+      document.querySelector("#loading-message").textContent = "Bump Duel could not start. Check the game dependencies with npm install, then retry.";
+      document.querySelector("#retry").hidden = false;
+      document.querySelector("#side").textContent = "No side assigned";
+      document.querySelector("#phase").textContent = "Could not start";
+      console.error("Bump Duel initialization failed:", error);
+    });
+  </script>
 </body>
 </html>

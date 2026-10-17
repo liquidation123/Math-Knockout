@@ -12,17 +12,36 @@ if (!room.searchParams.has("room")) {
 }
 const view = createView($("#arena"), $("#hud"), $("#controls"), "bump");
 let mountainReady = false;
+let startupFailed = false, leaving = false;
+let state, previewLine, preview, lastKey = "", summitView = false;
+function updateLoading() {
+  // A loaded model alone is not enough: the server must assign a real side.
+  $("#loading").hidden = mountainReady && !!state && !startupFailed;
+  if (!startupFailed) $("#loading-message").textContent = mountainReady ? "Waiting for side assignment…" : "Loading the summit…";
+}
+function showConnectionError(message, error) {
+  if (startupFailed || leaving) return;
+  startupFailed = true;
+  $("#loading").hidden = false;
+  $("#loading-message").textContent = message;
+  $("#retry").hidden = false;
+  $("#side").textContent = "Connection unavailable";
+  $("#phase").textContent = "Could not connect";
+  $("#error").textContent = message;
+  for (const id of ["#equation", "#lock", "#reset", "#view"]) $(id).disabled = true;
+  console.error("Bump Duel:", message, error || "");
+  socket.close();
+}
 view.ready.then(() => {
   mountainReady = true;
-  $("#loading").hidden = true;
+  updateLoading();
   updateScreen();
 }).catch((error) => {
-  $("#loading").textContent = "Mountain failed to load. Reload to retry.";
-  console.error("Mountain load failed:", error);
+  showConnectionError("The mountain could not load. Check the connection, then retry.", error);
 });
 view.setViewMode("character");
 const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/?room=${room.searchParams.get("room")}`);
-let state, previewLine, preview, lastKey = "", summitView = false;
+const connectionHelp = "Cannot reach the Bump Duel server. Stop the old server and run npm start again; open the address it prints, then retry. Bump Duel needs a Node/WebSocket server, not static hosting.";
 
 socket.addEventListener("open", async () => {
   try {
@@ -32,7 +51,7 @@ socket.addEventListener("open", async () => {
 });
 
 function drawPreview() {
-  if (!state || state.side == null || state.phase !== "planning" || state.locked[state.side]) return;
+  if (startupFailed || !state || state.side == null || state.phase !== "planning" || state.locked[state.side]) return;
   const player = state.players[state.side];
   const key = $("#equation").value + player.position.x + "," + player.position.y;
   if (key === lastKey) return;
@@ -53,7 +72,7 @@ function drawPreview() {
 }
 
 function updateScreen() {
-  if (!state) return;
+  if (!state || startupFailed) return;
   const { side, phase, players, locked } = state;
   $("#side").textContent = `You are ${side === 0 ? "Blue" : "Red"} · mass ${players[side].mass.toFixed(2)}×`;
   $("#blue").textContent = `Blue · ${players[0].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[0] ? "ready" : "choosing"}`;
@@ -61,7 +80,8 @@ function updateScreen() {
   $("#phase").textContent = phase === "planning" ? "Choose a path" : phase === "countdown" ? "Launching together" : phase === "finished" ? state.winner === "Draw" ? "Draw" : `${state.winner} wins` : "Duel in motion";
   const canEdit = mountainReady && phase === "planning" && !locked[side];
   $("#equation").disabled = $("#lock").disabled = !canEdit;
-  $("#view").disabled = players[side].eliminated;
+  $("#view").disabled = !mountainReady || players[side].eliminated;
+  $("#reset").disabled = !mountainReady;
   $("#lock").textContent = locked[side] ? "Locked ✓" : "Lock in";
   if (phase === "planning" && locked[side]) $("#error").textContent = "Locked in. Waiting for the other player.";
   if (phase === "planning" && !locked[side]) drawPreview();
@@ -69,11 +89,21 @@ function updateScreen() {
 }
 
 socket.addEventListener("message", ({ data }) => {
-  const message = JSON.parse(data);
+  if (startupFailed || leaving) return;
+  let message;
+  try { message = JSON.parse(data); }
+  catch (error) { showConnectionError("The duel server sent an unreadable message. Restart the server, then retry.", error); return; }
+  if (!message || typeof message !== "object") { showConnectionError("The duel server sent an invalid message. Restart it, then retry."); return; }
   if (message.type === "error") { $("#error").textContent = message.error; return; }
   if (message.type === "shape") { view.setPlayerShape(message.side, message.mask); return; }
+  if (message.type !== "state") return;
+  if (![0, 1].includes(message.side) || !Array.isArray(message.players) || message.players.length !== 2 ||
+      !message.players.every((player) => player?.position && Number.isFinite(player.mass)) || !Array.isArray(message.locked)) {
+    showConnectionError("The duel server sent an invalid starting state. Restart it, then retry."); return;
+  }
   const oldPhase = state?.phase;
   state = message;
+  updateLoading();
   if (oldPhase !== "finished" && state.phase === "finished") {
     summitView = true;
     view.setViewMode("summit");
@@ -89,16 +119,19 @@ socket.addEventListener("message", ({ data }) => {
   if (state.phase === "running" && previewLine) { view.removeCurve(previewLine); previewLine = null; }
   updateScreen();
 });
-socket.addEventListener("close", () => { $("#phase").textContent = "Disconnected"; });
-window.addEventListener("pagehide", () => { document.exitPointerLock?.(); socket.close(); });
+socket.addEventListener("error", (error) => showConnectionError(connectionHelp, error));
+socket.addEventListener("close", (event) => showConnectionError(event.reason || connectionHelp));
+window.addEventListener("pagehide", () => { leaving = true; document.exitPointerLock?.(); socket.close(); });
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 $("#equation").addEventListener("input", drawPreview);
 $("#form").addEventListener("submit", (event) => {
   event.preventDefault();
   drawPreview();
-  if (!preview?.error && state?.phase === "planning") socket.send(JSON.stringify({ type: "lock", expression: $("#equation").value }));
+  if (!startupFailed && mountainReady && !preview?.error && state?.phase === "planning" && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "lock", expression: $("#equation").value }));
 });
-$("#reset").addEventListener("click", () => socket.send(JSON.stringify({ type: "reset" })));
+$("#reset").addEventListener("click", () => {
+  if (!startupFailed && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "reset" }));
+});
 $("#invite").addEventListener("click", async () => {
   await navigator.clipboard.writeText(location.href);
   $("#invite").textContent = "Copied!";
@@ -111,7 +144,7 @@ $("#view").addEventListener("click", () => {
   $("#view").textContent = summitView ? "First person" : "Summit view";
 });
 function frame() {
-  if (state) {
+  if (state && !startupFailed) {
     view.drawPlayers(state.players, state.side);
     view.updateCharacterCamera(state.players, state.side);
     const left = Math.ceil((state.startAt - Date.now()) / 1000);
