@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#198ee5">
+    <meta name="description" content="Draw your Out-Mathed character before the clock runs out.">
+    <title>Draw your character — Out-Mathed</title>
+    <link rel="icon" href="data:,">
+    <link rel="preload" href="/assets/hero-landscape.jpg" as="image">
+    <link rel="stylesheet" href="/create.css">
+    <script type="module" src="/create.js"></script>
+  </head>
+  <body>
+    <main class="scene">
+      <a class="home-link" href="/" aria-label="Back to home">← <span>OUT-MATHED</span></a>
+      <h1 class="screen-title">Draw your character</h1>
+      <div class="studio">
+        <div class="timer badge" aria-label="Time remaining">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="25" r="18"/><path d="M24 12v14h10"/></svg>
+          <span class="divider"></span><strong id="seconds">10</strong>
+        </div>
+
+        <div class="drawing-frame">
+          <canvas id="drawing" width="720" height="440" aria-label="Character drawing canvas"></canvas>
+        </div>
+
+        <div class="ink-area" aria-label="Ink remaining">
+          <div class="vial">
+            <div class="vial-cap top"></div>
+            <div class="vial-glass"><div class="ink-liquid" id="ink-liquid"></div><div class="glass-shine"></div></div>
+            <div class="vial-cap bottom"></div>
+          </div>
+          <div class="ink-badge badge"><small>INK</small><strong id="liters">20.00L</strong></div>
+        </div>
+
+        <div class="toolbar" role="toolbar" aria-label="Drawing tools">
+          <button class="tool selected" data-tool="pencil" type="button" aria-label="Pencil" aria-pressed="true" title="Pencil">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="m10 33 24-24 6 6-24 24-9 2z"/><path d="m29 14 6 6M10 33l6 6"/></svg>
+          </button>
+          <button class="tool" data-tool="line" type="button" aria-label="Straight line" aria-pressed="false" title="Straight line">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 40 40 8"/></svg>
+          </button>
+          <button class="tool" data-tool="fill" type="button" aria-label="Fill bucket" aria-pressed="false" title="Fill bucket">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="m7 24 17-18 17 18-17 17zM17 13l20 20M39 35c0 3 2 5 4 5s4-2 4-5l-4-6z"/></svg>
+          </button>
+          <button class="tool" id="undo" type="button" aria-label="Undo" title="Undo">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M18 10 8 20l10 10M9 20h21c8 0 12 4 12 11s-4 11-13 11H18"/></svg>
+          </button>
+          <button class="tool" id="clear" type="button" aria-label="Clear drawing" title="Clear drawing">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 13h28M18 13V8h12v5M14 17l2 25h16l2-25M21 22v14M27 22v14"/></svg>
+          </button>
+        </div>
+        <p class="status" id="status" role="status">Pick a tool and draw to start your 10 seconds.</p>
+      </div>
+      <a class="arena-link" id="arena-link" href="/play.html" hidden>Open arena demo →</a>
+    </main>
+  </body>
+</html>
