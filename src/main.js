@@ -19,10 +19,10 @@ view.ready.then(() => {
 });
 readSavedMask().then((mask) => {
   if (mask) {
-    for (let index = 0; index < 6; index += 1) view.setPlayerShape(index, mask);
-    document.querySelector("#character-note").firstChild.textContent = "Your drawing is in the arena · ";
+    for (let index = 0; index < 3; index += 1) view.setPlayerShape(index, mask);
+    document.querySelector("#character-note").firstChild.textContent = "Blue uses your drawing; Red has its own characters · ";
   }
-}).catch((error) => console.warn("Saved drawing unavailable; using cubes.", error));
+}).catch((error) => console.warn("Saved drawing unavailable; using starter characters.", error));
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 const expression = document.querySelector("#expression");
 const fire = document.querySelector("#fire");
