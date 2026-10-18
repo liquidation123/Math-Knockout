@@ -289,7 +289,13 @@ export function createView(container, hud, controls, mode = "projectile") {
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const filled = hasInk(x, y, 2);
       const outlined = filled || hasInk(x, y, 4);
-      pixels.data.set([...(filled ? color : [18, 25, 35]), outlined ? 255 : 0], (y * width + x) * 4);
+      const u = x / width, v = y / height;
+      const highlight = Math.exp(-(((u - 0.32) / 0.11) ** 2 + ((v - 0.24) / 0.075) ** 2));
+      const sheen = Math.exp(-(((u - 0.45) / 0.42) ** 2 + ((v - 0.18) / 0.2) ** 2));
+      const shade = 0.72 + (1 - v) * 0.34 - u * 0.06;
+      const gloss = Math.min(0.92, highlight * 0.8 + sheen * 0.16);
+      const fill = color.map((channel) => Math.min(255, Math.round(channel * shade + (255 - channel) * gloss)));
+      pixels.data.set([...(filled ? fill : [18, 25, 35]), outlined ? 255 : 0], (y * width + x) * 4);
     }
     context.putImageData(pixels, 0, 0);
     const texture = new THREE.CanvasTexture(canvas);
