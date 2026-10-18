@@ -1,5 +1,5 @@
 import { buildPreview } from "./equations.js";
-import { travelPath, createDuel, lockEquation, launchDuel, updateDuel, inkFromMask, setShapePhysics } from "./duel.js";
+import { travelPath, createDuel, lockEquation, launchDuel, updateDuel, inkFromMask, setShapePhysics, bumpDirection } from "./duel.js";
 import { insideArena, takeFixedSteps } from "./physics.js";
 import { createView } from "./scene.js";
 import { readSavedMask } from "./saved-character.js";
@@ -73,10 +73,11 @@ socket?.addEventListener("open", async () => {
 function drawPreview() {
   if (startupFailed || !state || state.side == null || state.phase !== "planning" || state.locked[state.side]) return;
   const player = state.players[state.side];
-  const key = $("#equation").value + player.position.x + "," + player.position.y;
+  const direction = bumpDirection(state.players, state.side);
+  const key = $("#equation").value + player.position.x + "," + player.position.y + "|" + direction;
   if (key === lastKey) return;
   lastKey = key;
-  preview = buildPreview($("#equation").value, player.position, state.side === 0 ? 1 : -1);
+  preview = buildPreview($("#equation").value, player.position, direction);
   if (previewLine) view.removeCurve(previewLine);
   previewLine = null;
   if (preview.error) { $("#error").textContent = preview.error; return; }
