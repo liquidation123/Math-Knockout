@@ -46,13 +46,17 @@ test("shared mountain uses the branch asset, lighting, and exact stone collision
   assert.equal(scene.background, null); // Transparent renderer shows the CSS sky.
   assert.ok(scene.children.some((object) => object.isHemisphereLight && object.intensity === 1.5));
   assert.ok(scene.children.some((object) => object.isDirectionalLight && object.intensity === 2.3));
-  const blocks = scene.children.filter((object) => object.isMesh);
-  assert.equal(blocks.length, OBSTACLES.length);
-  blocks.forEach((mesh, index) => {
-    const box = OBSTACLES[index];
-    assert.deepEqual(mesh.position.toArray(), [box.x, box.y, box.height / 2]);
-    const shape = mesh.geometry.parameters;
-    assert.deepEqual([shape.width, shape.height, shape.depth], [box.width, box.depth, box.height]);
+  const stones = scene.children.find((object) => object.isInstancedMesh);
+  assert.equal(stones.count, OBSTACLES.length * 6);
+  const matrix = new THREE.Matrix4(), center = new THREE.Vector3();
+  OBSTACLES.forEach((box, index) => {
+    center.set(0, 0, 0);
+    for (let piece = 0; piece < 6; piece++) {
+      stones.getMatrixAt(index * 6 + piece, matrix);
+      center.add(new THREE.Vector3().setFromMatrixPosition(matrix));
+    }
+    center.divideScalar(6);
+    assert.ok(center.distanceTo(new THREE.Vector3(box.x, box.y, box.height / 2)) < 1e-6);
   });
 });
 

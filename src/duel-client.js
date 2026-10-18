@@ -29,9 +29,9 @@ function showConnectionError(message, error) {
   $("#retry").hidden = false;
   $("#side").textContent = "Connection unavailable";
   $("#phase").textContent = "Could not connect";
-  $("#error").textContent = message;
+  $("#error").textContent = "Offline";
   for (const id of ["#equation", "#lock", "#reset", "#view", "#again"]) $(id).disabled = true;
-  document.querySelectorAll("[data-equation]").forEach((button) => { button.disabled = true; });
+  document.querySelectorAll("[data-aim]").forEach((button) => { button.disabled = true; });
   console.error("Bump Duel:", message, error || "");
   socket?.close();
 }
@@ -85,13 +85,28 @@ function drawPreview() {
   const end = points.at(-1);
   const edge = end && !insideArena(end.x, end.y, .8);
   $("#location").textContent = end ? `Landing ≈ (${end.x.toFixed(1)}, ${end.y.toFixed(1)})${edge ? " · near the edge!" : ""}` : "No playable path";
-  $("#error").textContent = edge ? "Careful: this path ends close to the fall edge." : "Your opponent's hidden path may change the collision.";
+  $("#error").textContent = edge ? "Near the edge" : "";
+}
+
+function suggestPaths() {
+  const direct = document.querySelector('[data-aim="direct"]');
+  const flank = document.querySelector('[data-aim="flank"]');
+  if (!direct?.dataset || !flank?.dataset) return;
+  const own = state.players[state.side].position;
+  const rival = state.players[1 - state.side].position;
+  const dx = rival.x - own.x;
+  if (Math.abs(dx) < 0.1) return;
+  // The equation is relative to the player's position, so slope = rise / run.
+  const slope = (rival.y - own.y) / dx;
+  const insideLane = Math.max(-6, Math.min(6, rival.y + (rival.y < 0 ? 2 : -2)));
+  direct.dataset.equation = `${slope.toFixed(3)}*x`;
+  flank.dataset.equation = `${((insideLane - own.y) / dx).toFixed(3)}*x`;
 }
 
 function updateScreen() {
   if (!state || startupFailed) return;
   const { side, phase, players, locked } = state;
-  $("#side").textContent = `You are ${side === 0 ? "Blue" : "Red"} · mass ${players[side].mass.toFixed(2)}×`;
+  $("#side").textContent = `You are ${side === 0 ? "Blue" : "Red"} · choose a path`;
   $("#blue").textContent = `Blue · ${players[0].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[0] ? "ready" : "choosing"}`;
   $("#red").textContent = `Red · ${players[1].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[1] ? "ready" : "choosing"}`;
   $("#phase").textContent = phase === "planning" ? "Choose a path" : phase === "countdown" ? "Launching together" : phase === "finished" ? state.winner === "Draw" ? "Draw" : `${state.winner} wins` : "Duel in motion";
@@ -101,9 +116,9 @@ function updateScreen() {
   $("#reset").disabled = !mountainReady;
   $("#lock").textContent = locked[side] ? "Locked ✓" : "Lock in";
   $("#result-screen").hidden = phase !== "finished";
-  document.querySelectorAll("[data-equation]").forEach((button) => { button.disabled = !canEdit; });
+  document.querySelectorAll("[data-aim]").forEach((button) => { button.disabled = !canEdit; });
   if (phase === "planning" && locked[side]) $("#error").textContent = "Locked in. Waiting for the other player.";
-  if (phase === "planning" && !locked[side]) drawPreview();
+  if (phase === "planning" && !locked[side]) { suggestPaths(); drawPreview(); }
   if (phase === "finished") {
     const win = state.winner === (side === 0 ? "Blue" : "Red");
     $("#result-title").textContent = state.winner === "Draw" ? "It's a draw" : win ? "You held the summit!" : "You fell from the summit";
@@ -151,7 +166,7 @@ socket?.addEventListener("close", (event) => showConnectionError(event.reason ||
 window.addEventListener("pagehide", () => { leaving = true; document.exitPointerLock?.(); socket?.close(); });
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 $("#equation").addEventListener("input", drawPreview);
-document.querySelectorAll("[data-equation]").forEach((button) => button.addEventListener("click", () => {
+document.querySelectorAll("[data-aim]").forEach((button) => button.addEventListener("click", () => {
   $("#equation").value = button.dataset.equation;
   drawPreview();
   $("#equation").focus();
