@@ -50,15 +50,16 @@ export function createVictoryScreen(onReplay, perspectiveTeam = null) {
       const draw = winner === 'Draw';
       const viewingTeam = typeof perspectiveTeam === 'function' ? perspectiveTeam() : perspectiveTeam;
       const lost = !draw && viewingTeam && viewingTeam !== winner;
+      const resigned = round.result.reason?.includes('resigned');
       const displayTeam = lost ? viewingTeam : winner;
       const team = displayTeam === 'Blue' ? 0 : 1;
       const survivors = round.players.filter((player) => !player.eliminated && player.team === team).length;
       const seconds = Math.floor(round.time);
       screen.dataset.team = displayTeam.toLowerCase();
       screen.dataset.outcome = draw ? 'draw' : lost ? 'loss' : 'win';
-      screen.querySelector('h2').textContent = draw ? 'What a match!' : lost ? 'Good try!' : 'Victory!';
-      screen.querySelector('.victory-team').textContent = draw ? 'A draw. An even match.' : lost ? viewingTeam + ' team is out' : winner + ' team wins';
-      screen.querySelector('#victory-message').textContent = round.result.reason?.includes('resigned')
+      screen.querySelector('h2').textContent = draw ? 'What a match!' : lost && resigned ? 'You resigned' : lost ? 'Good try!' : 'Victory!';
+      screen.querySelector('.victory-team').textContent = draw ? 'A draw. An even match.' : lost && resigned ? viewingTeam + ' conceded the round' : lost ? viewingTeam + ' team is out' : winner + ' team wins';
+      screen.querySelector('#victory-message').textContent = resigned
         ? round.result.reason + '. ' + winner + ' wins this round.'
         : draw ? 'Both teams are out. Settle the score in a rematch!'
         : lost ? 'A new equation could turn the next round around.' : 'Brilliant angles. Beautiful win.';
