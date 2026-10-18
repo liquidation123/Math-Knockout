@@ -58,3 +58,5 @@ build exposes only these two public values in `posthog-config.json`.
 For Render, set both variables on the Node service and deploy the latest commit.
 Never use a personal API key in browser configuration. The browser SDK can be
 blocked by an ad blocker; verify live ingestion in PostHog after deployment.
+
+Web deploy: https://math-knockout-2.onrender.com/
