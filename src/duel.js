@@ -50,9 +50,17 @@ export function createDuel() {
   });
   return {
     players, bodies,
-    paths: [null, null], locked: [false, false], phase: "planning", elapsed: 0, winner: null,
+    paths: [null, null], locked: [false, false], phase: "planning", elapsed: 0, winner: null, resignedBy: null,
     round: 1, radius: DUEL_RADIUS, replay: [], replayTime: 0, finishAt: 0,
   };
+}
+
+export function resignDuel(duel, side) {
+  if (duel.phase === "finished" || ![0, 1].includes(side)) return false;
+  duel.phase = "finished";
+  duel.winner = duel.players[1 - side].name;
+  duel.resignedBy = side;
+  return true;
 }
 
 export function setDuelBody(duel, side, mask) {

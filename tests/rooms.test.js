@@ -71,6 +71,10 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   assert.equal(blue.state.phase, "countdown", "An old timer must not launch the new round early.");
   await waitUntil(() => blue.state.phase === "running");
   assert.ok(blue.state.players.every((player) => player.health === 100));
+  red.socket.send(JSON.stringify({ type: "resign", side: 0 })); // The server must use the socket's side.
+  await waitUntil(() => blue.state.phase === "finished" && red.state.phase === "finished");
+  assert.equal(blue.state.winner, "Blue");
+  assert.equal(red.state.resignedBy, 1);
 
   // Leaving clears the departing player's old drawing on the remaining client.
   const mask = "1".repeat(100) + "0".repeat(10140);
