@@ -79,7 +79,7 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   red.socket.send(JSON.stringify({ type: "shape", mask }));
   await waitUntil(() => blue.shapes.some((message) => message.side === 1 && message.mask === mask));
   await waitUntil(() => blue.state.players[1].mass !== 1);
-  assert.ok(Math.abs(blue.state.players[1].mass - (0.8 + 0.06 * 100 * 100 / 10240)) < 1e-6);
+  assert.ok(Math.abs(blue.state.players[1].mass - (0.65 + 0.10 * 100 * 100 / 10240)) < 1e-6);
   red.socket.close();
   await once(red.socket, "close");
   const resumed = connect("room=integration-test&resume=" + red.state.token);
@@ -110,7 +110,7 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   const solo = connect("quick=1");
   await waitUntil(() => solo.state?.bot, 12000);
   assert.equal(solo.state.side, 0);
-  // A tiny drawing loses a straight collision to the heavier starter bot.
+  // Quick Match chooses an evasive path without waiting for a second browser.
   const tiny = Array.from({ length: 10240 }, (_, i) => {
     const x = i % 128, y = Math.floor(i / 128);
     return x >= 44 && x < 84 && y >= 38 && y < 43 ? "1" : "0";
@@ -118,6 +118,7 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   solo.socket.send(JSON.stringify({ type: "shape", mask: tiny }));
   await waitUntil(() => solo.state.players[0].mass < 1);
   solo.socket.send(JSON.stringify({ type: "lock", expression: "0" }));
-  await waitUntil(() => solo.state?.phase === "finished", 12000);
-  assert.ok(["Blue", "Red", "Draw"].includes(solo.state.winner));
+  await waitUntil(() => solo.state?.phase === "finished" ||
+    (solo.state?.phase === "planning" && solo.state.round === 2), 12000);
+  assert.ok(Math.abs(solo.state.players[1].position.y) > 1, "bot should sidestep the straight path");
 });

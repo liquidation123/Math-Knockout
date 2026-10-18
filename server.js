@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { createDuel, launchDuel, lockEquation, setDuelBody, updateDuel } from "./src/duel.js";
+import { chooseBotEquation, createDuel, launchDuel, lockEquation, setDuelBody, updateDuel } from "./src/duel.js";
 import { takeFixedSteps } from "./src/physics.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
@@ -105,7 +105,7 @@ sockets.on("connection", (socket, request) => {
       room.botTimer = null;
       if (room.clients[0] && !room.clients[1]) {
         room.bot = true;
-        if (room.duel.locked[0]) { lockEquation(room.duel, 1, "0"); countdown(room); }
+        if (room.duel.locked[0]) { lockEquation(room.duel, 1, chooseBotEquation(room.duel)); countdown(room); }
         publish(room);
       }
     }, 10000);
@@ -121,8 +121,8 @@ sockets.on("connection", (socket, request) => {
     if (message.type === "lock") {
       const error = lockEquation(room.duel, side, String(message.expression || ""));
       if (error) return send(socket, { type: "error", error });
-      // A weak server bot chooses the straight route; no client can fake its turn.
-      if (room.bot) lockEquation(room.duel, 1, "0");
+      // The bot picks from public positions, never the hidden human equation.
+      if (room.bot) lockEquation(room.duel, 1, chooseBotEquation(room.duel));
       countdown(room);
       publish(room);
     } else if (message.type === "shape" && room.duel.phase === "planning" && !room.duel.locked[side]) {

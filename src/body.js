@@ -32,7 +32,7 @@ export function bodyFromMask(mask) {
   if (!cells.length) throw new Error("Draw some material first.");
   const cx = sx / cells.length, cy = sy / cells.length;
   const ink = cells.length * 100 / mask.length;
-  const mass = .8 + .06 * ink;
+  const mass = .65 + .10 * ink; // 20L is much sturdier, but launches more slowly.
   // Each ink cell contributes equally; the second moment is about the same centre used by the mesh.
   const spread = cells.reduce((sum, [x, y]) => sum + (x + .5 - cx) ** 2 + (y + .5 - cy) ** 2, 0);
   const inertia = mass * CELL ** 2 * (spread / cells.length + 1 / 6);

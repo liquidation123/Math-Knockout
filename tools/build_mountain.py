@@ -11,6 +11,7 @@ OUT = ROOT / "assets"
 OUT.mkdir(exist_ok=True)
 N = 96
 POWER = 2.6  # Matches the browser's rounded gameplay boundary.
+HALF_DEPTH = 8.5
 
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
@@ -57,7 +58,7 @@ def point(t, scale=1, z=0):
     a = 2 * math.pi * t
     c, s = math.cos(a), math.sin(a)
     return (14 * math.copysign(abs(c) ** (2 / POWER), c) * scale,
-            8 * math.copysign(abs(s) ** (2 / POWER), s) * scale, z)
+            HALF_DEPTH * math.copysign(abs(s) ** (2 / POWER), s) * scale, z)
 
 def mesh(name, vertices, faces, mats, choices):
     data = bpy.data.meshes.new(name)
@@ -92,7 +93,7 @@ uv = top.data.uv_layers.new()
 for polygon in top.data.polygons:
     for loop in polygon.loop_indices:
         x, y, _ = top.data.vertices[top.data.loops[loop].vertex_index].co
-        uv.data[loop].uv = ((x + 14) / 28, (y + 8) / 16)
+        uv.data[loop].uv = ((x + 14) / 28, (y + HALF_DEPTH) / (2 * HALF_DEPTH))
 
 # A broad sloping mountain replaces the almost vertical cylinder. The lip still
 # matches the unchanged gameplay top; ledges and buttresses widen below it.
@@ -148,7 +149,7 @@ for i in range(76):
     x, y, _ = point(t, 1.012)
     block((x, y, .13), (random.uniform(.7, 1.2), random.uniform(.45, .8),
                         random.uniform(.24, .4)), i % len(stone),
-          math.atan2(y/8, x/14) + math.pi/2)
+          math.atan2(y/HALF_DEPTH, x/14) + math.pi/2)
 # Weathered, tapered masonry columns replace stacks of identical cubes.
 for t, height in [(.12, 4.0), (.20, 1.8), (.30, 1.5), (.39, 4.2),
                   (.58, 1.5), (.67, 1.6), (.81, 1.7), (.91, 1.6)]:
@@ -179,8 +180,8 @@ ruins.modifiers.new("Corner normals", 'WEIGHTED_NORMAL')
 # The painted meadow is a color base; thousands of bent 3D blades make its depth real.
 verts, faces, choices = [], [], []
 for i in range(5200):
-    x, y = random.uniform(-13.7, 13.7), random.uniform(-7.7, 7.7)
-    edge = abs(x/14)**POWER + abs(y/8)**POWER
+    x, y = random.uniform(-13.7, 13.7), random.uniform(-8.2, 8.2)
+    edge = abs(x/14)**POWER + abs(y/HALF_DEPTH)**POWER
     if edge > .94:
         continue
     # Three crossed leaves per tuft, with a bent tip and two triangles per leaf.
@@ -207,8 +208,8 @@ petal = [material("Flower ivory", (.98, .93, .68)),
          material("Flower gold", (.96, .72, .23))]
 verts, faces, choices = [], [], []
 for i in range(170):
-    x, y = random.uniform(-13, 13), random.uniform(-7, 7)
-    if abs(x/14)**POWER + abs(y/8)**POWER > .88: continue
+    x, y = random.uniform(-13, 13), random.uniform(-7.5, 7.5)
+    if abs(x/14)**POWER + abs(y/HALF_DEPTH)**POWER > .88: continue
     radius = random.uniform(.035, .09)
     start = len(verts)
     verts.append((x, y, .11))

@@ -4,7 +4,7 @@ import { bodyContact, bodyFromMask, starterMask } from "./body.js";
 
 const LAUNCH_SPEED = 7.5;
 const LAUNCH_FRICTION = 2.25; // Distance = speed²/(2·friction) = 12.5 units.
-export const DUEL_RADIUS = 7.8;
+export const DUEL_RADIUS = 8.25;
 export const travelDistance = (mass = 1) => LAUNCH_SPEED ** 2 / (2 * LAUNCH_FRICTION * mass);
 export const insideDuel = (x, y, radius) => Math.hypot(x, y) < radius;
 
@@ -32,9 +32,18 @@ export function interceptSlope(own, rival, ownMass, rivalMass, side, radius) {
   return dy / (forward * run);
 }
 
+export function chooseBotEquation(duel, random = Math.random) {
+  const [human, bot] = duel.players;
+  // The bot sees positions, never the human's hidden equation. Red moves toward -X.
+  let away = Math.sign(bot.position.y - human.position.y) || (random() < .5 ? -1 : 1);
+  if (Math.abs(bot.position.y) > duel.radius * .4) away = -Math.sign(bot.position.y);
+  const slope = (-away * (.75 + Math.floor(random() * 4) * .2)).toFixed(2);
+  return random() < .3 ? `${slope}*x+0.15*sin(1.5*x)` : `${slope}*x`;
+}
+
 export function createDuel() {
   const bodies = [bodyFromMask(starterMask(0)), bodyFromMask(starterMask(1))];
-  const players = [createPlayer("Blue", -5.6, 0, 0.5, 0), createPlayer("Red", 5.6, 0, 0.5, 1)];
+  const players = [createPlayer("Blue", -5.2, 0, 0.5, 0), createPlayer("Red", 5.2, 0, 0.5, 1)];
   players.forEach((player, side) => {
     Object.assign(player, { mass: bodies[side].mass, inertia: bodies[side].inertia,
       radius: bodies[side].radius, angle: 0, angularVelocity: 0 });
@@ -199,16 +208,24 @@ export function updateDuel(duel, dt) {
   } else if (duel.elapsed > 8) {
     duel.phase = "planning";
     duel.round += 1;
-    duel.radius = Math.max(5.8, DUEL_RADIUS - (duel.round - 1) * .7);
+    const nextRadius = Math.max(2.8, DUEL_RADIUS - (duel.round - 1) * .7);
+    const [blueDistance, redDistance] = duel.players.map((player) =>
+      Math.hypot(player.position.x, player.position.y));
+    // If both would fall, shrink just until the farther one leaves first.
+    duel.radius = blueDistance >= nextRadius && redDistance >= nextRadius &&
+      Math.abs(blueDistance - redDistance) > .05
+      ? (blueDistance + redDistance) / 2 : nextRadius;
     duel.paths = [null, null];
     duel.locked = [false, false];
     duel.players.forEach((player) => {
       player.velocity.x = player.velocity.y = 0;
-      const distance = Math.hypot(player.position.x, player.position.y);
-      if (distance > duel.radius - .3) {
-        player.position.x *= (duel.radius - .3) / distance;
-        player.position.y *= (duel.radius - .3) / distance;
-      }
+      // A shrinking summit must matter: a character left outside the new ring falls.
+      if (!insideDuel(player.position.x, player.position.y, duel.radius)) player.eliminated = true;
     });
+    const survivors = duel.players.filter((player) => !player.eliminated);
+    if (survivors.length < 2) {
+      duel.phase = "finished";
+      duel.winner = survivors.length ? survivors[0].name : "Draw";
+    }
   }
 }

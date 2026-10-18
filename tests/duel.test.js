@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDuel, insideDuel, interceptSlope, lockEquation, launchDuel,
+import { chooseBotEquation, createDuel, insideDuel, interceptSlope, lockEquation, launchDuel,
   safeTravelPath, setDuelBody, travelDistance, travelPath, updateDuel } from "../src/duel.js";
 import { FIXED_STEP } from "../src/physics.js";
 import { bodyFromMask, starterMask } from "../src/body.js";
@@ -54,6 +54,13 @@ test("more ink means more mass and changes a head-on collision", () => {
   assert.notEqual(duel.players[0].position.x, baseline.players[0].position.x);
 });
 
+test("using most of the ink has a clearly shorter launch than a light drawing", () => {
+  const light = bodyFromMask("1".repeat(103) + "0".repeat(10137));
+  const heavy = bodyFromMask("1".repeat(2048) + "0".repeat(8192));
+  assert.ok(travelDistance(light.mass) > 3 * travelDistance(heavy.mass));
+  assert.ok(heavy.inertia > light.inertia);
+});
+
 test("an invalid equation cannot lock or launch", () => {
   const duel = createDuel();
   assert.ok(lockEquation(duel, 0, "sin("));
@@ -80,7 +87,32 @@ test("heavier drawings launch slower, and each round tightens the circular bound
   updateDuel(duel, FIXED_STEP);
   assert.equal(duel.phase, "planning");
   assert.equal(duel.round, 2);
-  assert.ok(Math.abs(duel.radius - 7.1) < 1e-8);
+  assert.ok(Math.abs(duel.radius - 7.55) < 1e-8);
+});
+
+test("bot varies evasive paths without reading the hidden human equation", () => {
+  const first = createDuel(), second = createDuel();
+  lockEquation(first, 0, "0");
+  lockEquation(second, 0, "3*x");
+  assert.equal(chooseBotEquation(first, () => .3), chooseBotEquation(second, () => .3));
+  assert.notEqual(chooseBotEquation(first, () => .3), chooseBotEquation(first, () => .9));
+  const dodge = chooseBotEquation(first, () => .3);
+  lockEquation(first, 1, dodge);
+  launchDuel(first);
+  for (let i = 0; i < 1200 && first.phase === "running"; i++) updateDuel(first, FIXED_STEP);
+  assert.equal(first.lastImpact, undefined, "the bot should miss a straight player launch");
+});
+
+test("the shrinking ring eliminates a character left near the old edge", () => {
+  const duel = createDuel();
+  lockEquation(duel, 0, "0"); lockEquation(duel, 1, "0"); launchDuel(duel);
+  duel.paths.forEach((path) => { path.done = true; });
+  duel.players[0].position.x = 7.8;
+  duel.players[1].position.x = 0;
+  duel.elapsed = 8;
+  updateDuel(duel, FIXED_STEP);
+  assert.equal(duel.phase, "finished");
+  assert.equal(duel.winner, "Red");
 });
 
 test("mask cells determine mass, centre, inertia, and actual overlap", () => {

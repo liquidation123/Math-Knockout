@@ -105,7 +105,7 @@ function updateScreen() {
   $("#side").textContent = `You are ${side === 0 ? "Blue" : "Red"}${phase === "planning" ? " · choose a path" : ""}`;
   $("#blue").textContent = `Blue · ${players[0].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[0] ? "ready" : "choosing"}`;
   $("#red").textContent = `${state.bot ? "Bot" : "Red"} · ${players[1].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[1] ? "ready" : state.botAt && !state.bot ? `joining in ${Math.max(0, Math.ceil((state.botAt - Date.now()) / 1000))}s` : "choosing"}`;
-  $("#stage").textContent = `Round ${state.round} · ${state.round >= 3 ? "ruins appear" : "clear field"}`;
+  $("#stage").textContent = `Round ${state.round} · ${state.round >= 3 ? "ruins + " : ""}rim shrinks after launch`;
   const canEdit = mountainReady && phase === "planning" && !locked[side];
   $("#equation").disabled = $("#lock").disabled = !canEdit;
   $("#view").disabled = !mountainReady || players[side].eliminated;

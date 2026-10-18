@@ -83,8 +83,8 @@ test("physics rim matches the actual GLB grass mesh, not its rectangular boundin
   });
   assert.ok(vertices.every((point) => Math.abs(point.z) < 1e-7));
   for (const point of arenaOutline()) {
-    // Meshopt quantizes positions to about 0.004 world units in this export.
-    assert.ok(vertices.some((vertex) => Math.hypot(vertex.x - point.x, vertex.y - point.y) < 0.005));
+    // Meshopt quantizes positions to roughly 0.005 world units on the larger summit.
+    assert.ok(vertices.some((vertex) => Math.hypot(vertex.x - point.x, vertex.y - point.y) < 0.006));
     assert.ok(insideArena(point.x, point.y));
     assert.equal(insideArena(point.x * 1.001, point.y * 1.001), false);
   }
