@@ -58,10 +58,10 @@ export function createVictoryScreen(onReplay, perspectiveTeam = null) {
       screen.dataset.outcome = draw ? 'draw' : lost ? 'loss' : 'win';
       screen.querySelector('h2').textContent = draw ? 'What a match!' : lost ? 'Good try!' : 'Victory!';
       screen.querySelector('.victory-team').textContent = draw ? 'A draw. An even match.' : lost ? viewingTeam + ' team is out' : winner + ' team wins';
-      screen.querySelector('#victory-message').textContent = draw
-        ? 'Both teams are out. Settle the score in a rematch!'
-        : lost ? 'A new equation could turn the next round around.'
-        : 'Brilliant angles. Beautiful win.';
+      screen.querySelector('#victory-message').textContent = round.result.reason?.includes('resigned')
+        ? round.result.reason + '. ' + winner + ' wins this round.'
+        : draw ? 'Both teams are out. Settle the score in a rematch!'
+        : lost ? 'A new equation could turn the next round around.' : 'Brilliant angles. Beautiful win.';
       screen.querySelector('[data-stat="time"]').textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
       screen.querySelector('[data-stat="shots"]').textContent = round.castCount;
       screen.querySelector('[data-stat="survivors"]').textContent = (draw ? 0 : survivors) + ' / 3';
