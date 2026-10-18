@@ -36,7 +36,7 @@ progress::-webkit-progress-bar { background: #2a3547; }
 .character-list { white-space: pre-line; font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
 
 /* Top HUD: glass panel, team cards and one chip per character. */
-#hud {
+#hud, #controls {
   padding: 12px 14px; border-radius: 14px; border-color: #ffffff1f;
   background: linear-gradient(180deg, #172a42f2, #0d1828f2);
   box-shadow: 0 10px 28px #0007, inset 0 1px 0 #ffffff14;
@@ -86,6 +86,64 @@ progress::-webkit-progress-bar { background: #2a3547; }
 .member.selected b { color: #ffef8b; }
 .member.out { opacity: 0.4; }
 .member.out b { text-decoration: line-through; }
+
+/* Bottom equation panel: same glass style as the HUD, scoped to #controls. */
+#controls { scrollbar-width: thin; scrollbar-color: #ffffff30 transparent; }
+#controls .turn-row { margin-bottom: 6px; font-size: 14px; }
+#controls #caster:not(:empty) {
+  padding: 2px 9px; border: 1px solid #ffef8b66; border-radius: 999px;
+  background: #ffef8b14; font-weight: 600;
+}
+#controls .type-row label {
+  color: #9fb2c9; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+}
+#controls select, #controls .math-input {
+  padding: 5px 9px; border: 1px solid #ffffff24; border-radius: 8px;
+  background: #0a1422cc; color: #edf2f8;
+}
+#controls .math-input { font: 14px ui-monospace, "SF Mono", Menlo, monospace; }
+#controls select:hover, #controls .math-input:hover { border-color: #ffffff40; }
+#controls select:focus-visible, #controls .math-input:focus {
+  outline: none; border-color: #76b7ff; box-shadow: 0 0 0 3px #76b7ff33;
+}
+#controls .math-input[aria-invalid="true"] { border-color: #ff9eac; box-shadow: 0 0 0 3px #ff9eac26; }
+#controls [data-equation-type] .equation-row { font-size: 13px; font-weight: 600; color: #c8d5e6; }
+#fire {
+  padding: 6px 20px; border: 0; border-radius: 999px; font-weight: 800; letter-spacing: 0.03em;
+  background: linear-gradient(180deg, #ff9a5c, #e8553a); box-shadow: 0 2px 10px #e8553a66;
+}
+#fire:hover:not(:disabled) { background: linear-gradient(180deg, #ffab73, #f06347); }
+#controls .symbol-row { gap: 6px; margin-top: 6px; }
+#controls .symbol-row button {
+  min-width: 34px; padding: 1px 10px; border: 1px solid #ffffff1f; border-radius: 999px;
+  background: #ffffff0d; font-size: 13px;
+}
+#controls .symbol-row button:hover { background: #76b7ff26; border-color: #76b7ff66; }
+#controls .force-row {
+  margin-top: 8px; padding: 4px 10px; border-radius: 10px;
+  background: #ffffff08; border: 1px solid #ffffff12; font-weight: 600;
+}
+#controls #force-value {
+  padding: 2px 8px; border-radius: 999px; background: #0004; color: #9bd5ff;
+}
+#controls #equation-help, #controls .anchoring-help { margin-top: 5px; color: #9fb2c9; font-size: 11px; }
+#controls .syntax-help summary { margin-top: 4px; color: #9bd5ff; font-weight: 600; }
+#controls .pov-toggle, #controls .result-view {
+  display: inline-flex; align-items: center; gap: 6px; margin: 6px 6px 0 0;
+  padding: 2px 10px; border-radius: 999px; background: #ffffff0a; border: 1px solid #ffffff14;
+  font-size: 12px; color: #dbe7f7;
+}
+#controls .pov-toggle input { accent-color: #76b7ff; margin: 0; }
+#controls .result-view select { padding: 1px 6px; border-radius: 6px; font-size: 12px; }
+/* Status line: a callout so the next instruction stands out. */
+#controls #status:not(:empty) {
+  margin-top: 6px; padding: 5px 10px; border-left: 3px solid #76b7ff;
+  border-radius: 0 8px 8px 0; background: #76b7ff14; color: #dbe7f7;
+}
+#controls #result:not([hidden]) {
+  padding: 7px 10px; border-radius: 8px; background: #ffef8b14; border: 1px solid #ffef8b55;
+}
 .turn-row { font-size: 13px; margin-bottom: 8px; }
 .symbol-row { display: flex; gap: 5px; margin-top: 6px; }
 .symbol-row button { padding: 2px 10px; font-size: 13px; }
@@ -133,7 +191,7 @@ summary { cursor: pointer; }
   .teams { gap: 14px; }
   h1 { font-size: 19px; }
   .team-heading { gap: 5px; }
-  #hud { padding: 9px 10px; }
+  #hud, #controls { padding: 9px 10px; }
   #hud .title-row { flex-wrap: nowrap; gap: 6px; }
   #hud h1 { font-size: 16px; white-space: nowrap; }
   #hud .mode-link, #restart { padding: 4px 9px; font-size: 11px; }
@@ -144,6 +202,13 @@ summary { cursor: pointer; }
   .member { padding: 3px 4px 5px; }
   .member b { font-size: 10px; }
   .member span { font-size: 9px; }
+  #controls .turn-row { font-size: 13px; margin-bottom: 4px; }
+  #controls .type-row label { font-size: 10px; letter-spacing: 0.03em; }
+  #fire { padding: 5px 14px; }
+  #controls .force-row { padding: 2px 8px; margin-top: 6px; }
+  #controls #equation-help, #controls .anchoring-help { margin-top: 3px; font-size: 10px; line-height: 1.3; }
+  #controls .pov-toggle, #controls .result-view { margin-top: 4px; padding: 1px 8px; font-size: 11px; }
+  #controls #status:not(:empty) { margin-top: 5px; padding: 4px 8px; font-size: 11px; }
 }
 @media (max-height: 550px) and (min-width: 600px) {
   .panel { padding: 6px 10px; }
@@ -155,11 +220,13 @@ summary { cursor: pointer; }
   button { padding: 5px 10px; }
   .examples { display: none; }
   .turn-row { margin-bottom: 4px; }
-  #hud { padding: 6px 10px; }
+  #hud, #controls { padding: 6px 10px; }
   #hud .teams { margin-top: 5px; }
   #hud .team { padding: 4px 8px; }
   #hud progress { margin: 4px 0; }
   .member { flex-direction: row; justify-content: space-between; padding: 2px 5px 4px; }
+  #controls .force-row { padding: 2px 10px; margin-top: 6px; }
+  #controls .pov-toggle, #controls .result-view { margin-top: 4px; padding: 1px 8px; }
 }
 
 
