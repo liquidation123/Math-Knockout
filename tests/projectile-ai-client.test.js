@@ -4,14 +4,16 @@ import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
 import { shotDirection } from "../src/aiming.js";
-import { createRound, updateRound, firePreview, resignRound, selectCharacter, TEAM_NAMES } from "../src/combat.js";
+import { createRound, updateRound, firePreview, resignRound, selectCharacter, setRoundTeamBody, TEAM_NAMES } from "../src/combat.js";
+import { starterMask } from "../src/body.js";
 import { takeFixedSteps } from "../src/physics.js";
 
 const source = (await readFile(new URL("../src/main.js", import.meta.url), "utf8")).replace(/^import .+;\n/gm, "");
-async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, expression: "0", force: 1 })) {
+async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, expression: "0", force: 1 }), savedMask = null) {
   const nodes = new Map(), windowEvents = {}, errors = [], spoken = [];
   const node = (selector) => {
     if (!nodes.has(selector)) nodes.set(selector, { value: "1", hidden: false, textContent: "", checked: false,
+      firstChild: { textContent: "" },
       addEventListener(name, fn) { this[name] = fn; }, insertBefore() {}, focus() {},
       dataset: {}, style: { setProperty() {} }, replaceChildren() {}, append() {}, setAttribute() {},
       querySelector() { return node("result-select"); } });
@@ -21,15 +23,16 @@ async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, exp
   const opponent = { difficulty: "ai", isAI: true, cancel: () => { generation += 1; },
     token: () => generation, current: (token) => token === generation, wait: async () => true,
     choosing() {}, speak: async (name, text) => { spoken.push({ name, text }); return true; } };
-  const view = { ready: Promise.resolve(), resetCinematic() {}, finishProjectilePOV() {}, removeCurve() {}, drawCurve() {}, onCharacterClick() {}, canvas: { focus() {} } };
+  const view = { ready: Promise.resolve(), resetCinematic() {}, finishProjectilePOV() {}, removeCurve() {}, drawCurve() {}, setPlayerShape() {}, onCharacterClick() {}, canvas: { focus() {} } };
   const api = runInNewContext(source + "\n;({ getRound: () => round, playAiTurn, resetRound });", {
     URLSearchParams, location: { search: "?opponent=ai" }, createOpponentUI: () => opponent,
     document: { querySelector: node, querySelectorAll: () => [], createElement: () => node("new-label") },
     window: { confirm: () => true, addEventListener(name, fn) { windowEvents[name] = fn; } },
     createView: () => view, createVictoryScreen: () => ({ hide() {}, show() {} }),
     createEquationInput: () => ({ key: () => "0", preview: (origin, direction) => buildPreview("0", origin, direction) }),
-    readSavedMask: async () => null, chooseProjectileAction, buildPreview, shotDirection,
-    createRound, updateRound, firePreview, resignRound, selectCharacter, TEAM_NAMES, takeFixedSteps, requestAnimationFrame() {},
+    readSavedMask: async () => savedMask, chooseProjectileAction, buildPreview, shotDirection,
+    createRound, updateRound, firePreview, resignRound, selectCharacter, setRoundTeamBody, starterMask,
+    TEAM_NAMES, takeFixedSteps, requestAnimationFrame() {},
     console: { info() {}, warn() {}, error: (...args) => errors.push(args) },
   });
   await new Promise((resolve) => setImmediate(resolve));
@@ -38,6 +41,16 @@ async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, exp
   round.players.forEach((player) => { player.position.z = 0.5; });
   return { ...api, nodes, errors, spoken, windowEvents };
 }
+
+test("the loaded drawing sets Projectile Duel mass and keeps it on restart", async () => {
+  const mask = "1".repeat(2048) + "0".repeat(8192);
+  const ui = await setup(undefined, mask);
+  assert.ok(ui.getRound().players[0].mass > ui.getRound().players[3].mass);
+  assert.ok(ui.getRound().players.slice(0, 3).every((player) => player.mass === ui.getRound().players[0].mass));
+  const mass = ui.getRound().players[0].mass;
+  ui.resetRound();
+  assert.equal(ui.getRound().players[0].mass, mass);
+});
 
 test("Projectile AI uses the human fire action once, and never fires twice during flight", async () => {
   const ui = await setup();

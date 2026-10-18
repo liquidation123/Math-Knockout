@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chooseBotEquation, createDuel, insideDuel, interceptSlope, lockEquation, launchDuel, resignDuel,
   safeTravelPath, setDuelBody, travelDistance, travelPath, updateDuel } from "../src/duel.js";
-import { FIXED_STEP } from "../src/physics.js";
+import { FIXED_STEP, GROUND_FRICTION } from "../src/physics.js";
 import { bodyFromMask, starterMask } from "../src/body.js";
 
 function run(blue, red) {
@@ -63,6 +63,30 @@ test("more ink means more mass and changes a head-on collision", () => {
   for (let i = 0; i < 1200 && duel.phase === "running"; i++) updateDuel(duel, FIXED_STEP);
   assert.ok(duel.lastImpact);
   assert.notEqual(duel.players[0].position.x, baseline.players[0].position.x);
+});
+
+test("a heavy fighter takes a smaller velocity change than a light fighter in the same collision", () => {
+  const mask = (width, height) => Array.from({ length: 10240 }, (_, index) => {
+    const x = index % 128, y = Math.floor(index / 128);
+    return x >= 64 - width / 2 && x < 64 + width / 2 &&
+      y >= 40 - height / 2 && y < 40 + height / 2 ? "1" : "0";
+  }).join("");
+  const duel = createDuel();
+  setDuelBody(duel, 0, mask(50, 40));
+  setDuelBody(duel, 1, mask(10, 10));
+  lockEquation(duel, 0, "0"); lockEquation(duel, 1, "0"); launchDuel(duel);
+  duel.paths.forEach((path) => { path.done = true; });
+  duel.players[0].position.x = -.2;
+  duel.players[1].position.x = .2;
+  duel.players[0].velocity.x = 2;
+  duel.players[1].velocity.x = -2;
+  updateDuel(duel, FIXED_STEP);
+  assert.ok(duel.lastImpact);
+  const before = 2 - GROUND_FRICTION * FIXED_STEP;
+  const heavyChange = before - duel.players[0].velocity.x;
+  const lightChange = duel.players[1].velocity.x + before;
+  assert.ok(lightChange > heavyChange * 3);
+  assert.ok(Math.abs(heavyChange * duel.players[0].mass - lightChange * duel.players[1].mass) < 1e-8);
 });
 
 test("using most of the ink has a clearly shorter launch than a light drawing", () => {
