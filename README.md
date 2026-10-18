@@ -79,4 +79,4 @@ The simulation advances in fixed steps (`src/physics.js`), so browser frame rate
 
 Analytics are disabled unless `POSTHOG_PROJECT_TOKEN` and `POSTHOG_HOST` are set. For local work, put them in an ignored `.env` file. Set the same variables in the deployment environment and rebuild the static site. Use a **public project token**, never a personal API key. Events describe page and game actions, not drawings, typed equations, or room/reconnect tokens.
 
-Live game: [math-knockout-2.onrender.com](https://math-knockout-2.onrender.com/)
+Live game: https://math-knockout-2.onrender.com/
