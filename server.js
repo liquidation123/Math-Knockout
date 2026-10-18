@@ -12,6 +12,8 @@ const host = process.env.HOST || "127.0.0.1";
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".woff2": "font/woff2",
   ".css": "text/css",
   ".jpg": "image/jpeg",
   ".svg": "image/svg+xml",

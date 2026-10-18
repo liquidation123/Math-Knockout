@@ -12,6 +12,7 @@ async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, exp
   const node = (selector) => {
     if (!nodes.has(selector)) nodes.set(selector, { value: "1", hidden: false, textContent: "", checked: false,
       addEventListener(name, fn) { this[name] = fn; }, insertBefore() {}, focus() {},
+      dataset: {}, style: { setProperty() {} }, replaceChildren() {}, append() {}, setAttribute() {},
       querySelector() { return node("result-select"); } });
     return nodes.get(selector);
   };

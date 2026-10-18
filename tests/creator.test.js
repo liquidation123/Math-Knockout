@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fillArea, litersUsed, secondsLeft } from '../create.js';
+import { fillArea, formatLitres, litersUsed, secondsLeft } from '../create.js';
 
 test('ink counts painted area, including partially transparent edges', () => {
   const pixels = new Uint8ClampedArray(100 * 4);
@@ -28,12 +28,19 @@ test('countdown rounds up and stops at zero', () => {
   assert.equal(secondsLeft(10000, 10000), 0);
 });
 
+test('ink label rounds down to tenths and drops a trailing .0', () => {
+  assert.equal(formatLitres(20), '20L');
+  assert.equal(formatLitres(19.97), '19.9L');
+  assert.equal(formatLitres(15), '15L');
+  assert.equal(formatLitres(0.04), '0L');
+});
+
 test('canvas tools, ink cap, undo, clear, lock, and saved character', async () => {
   const width = 720, height = 440;
   const pixels = new Uint8ClampedArray(width * height * 4);
   const element = (extra = {}) => ({
     textContent: '', style: {}, disabled: false, hidden: true, dataset: {},
-    classList: { add() {}, toggle() {} },
+    classList: { add() {}, remove() {}, toggle() {} },
     addEventListener(name, fn) { this[`on${name}`] = fn; },
     setAttribute(name, value) { this[name] = value; },
     getAttribute(name) { return name === 'aria-label' ? this.label : ''; },
@@ -75,35 +82,40 @@ test('canvas tools, ink cap, undo, clear, lock, and saved character', async () =
   };
   const original = { document: globalThis.document, window: globalThis.window, sessionStorage: globalThis.sessionStorage,
     setInterval: globalThis.setInterval, clearInterval: globalThis.clearInterval, now: Date.now };
-  let now = 0, tick, saved;
+  let now = 0, tick;
+  const saved = {};
   try {
     globalThis.document = { querySelector: selector => nodes[selector], querySelectorAll: () => buttons };
     globalThis.window = {};
-    globalThis.sessionStorage = { setItem(key, value) { saved = { key, value }; } };
+    globalThis.sessionStorage = { setItem(key, value) { saved[key] = value; } };
     globalThis.setInterval = fn => { tick = fn; return 1; };
     globalThis.clearInterval = () => {};
     Date.now = () => now;
     await import(`../create.js?ui-test=${Math.random()}`);
     const pointer = (x, y) => ({ button: 0, pointerId: 1, clientX: x, clientY: y });
-    assert.equal(nodes['#liters'].textContent, '20.00L');
+    const level = () => Number.parseFloat(nodes['#ink-liquid'].style.height);
+    assert.equal(nodes['#liters'].textContent, '20L');
     canvas.fire('pointerdown', pointer(40, 40));
     canvas.fire('pointermove', pointer(100, 40));
     canvas.fire('pointerup', pointer(100, 40));
-    const pencilInk = Number.parseFloat(nodes['#liters'].textContent);
-    assert.ok(pencilInk < 20);
+    const pencilInk = level();
+    assert.ok(pencilInk < 100);
     assert.equal(nodes['#seconds'].textContent, '10');
     buttons[1].fire('click');
     assert.equal(canvas.dataset.tool, 'line');
     canvas.fire('pointerdown', pointer(40, 80));
     canvas.fire('pointermove', pointer(100, 80));
     canvas.fire('pointerup', pointer(100, 80));
-    assert.ok(Number.parseFloat(nodes['#liters'].textContent) < pencilInk);
+    assert.ok(level() < pencilInk);
     nodes['#undo'].fire('click');
-    assert.equal(Number.parseFloat(nodes['#liters'].textContent), pencilInk);
+    assert.equal(level(), pencilInk);
+    nodes['#clear'].fire('click'); // One tap only arms Clear.
+    assert.equal(level(), pencilInk);
+    assert.match(nodes['#status'].textContent, /Tap clear again/);
     nodes['#clear'].fire('click');
-    assert.equal(nodes['#liters'].textContent, '20.00L');
+    assert.equal(nodes['#liters'].textContent, '20L');
     nodes['#undo'].fire('click');
-    assert.equal(Number.parseFloat(nodes['#liters'].textContent), pencilInk);
+    assert.equal(level(), pencilInk);
     buttons[2].fire('click');
     assert.equal(canvas.dataset.tool, 'fill');
     const beforeFill = new Uint8ClampedArray(pixels);
@@ -116,8 +128,11 @@ test('canvas tools, ink cap, undo, clear, lock, and saved character', async () =
     assert.equal(canvas.classList.add !== undefined, true);
     assert.ok(buttons.every(button => button.disabled));
     assert.equal(nodes['#arena-link'].hidden, false);
-    assert.equal(saved.key, 'outMathedCharacter');
-    assert.ok(JSON.parse(saved.value).inkUsed > 0);
+    const character = JSON.parse(saved.outMathedCharacter);
+    assert.equal(saved[`outMathedCharacter:${character.id}`], saved.outMathedCharacter);
+    assert.ok(character.inkUsed > 0);
+    assert.equal(character.physics.massKg, character.inkUsed);
+    assert.equal(character.mask.runs.reduce((sum, run) => sum + run, 0), width * height);
     canvas.fire('pointerdown', pointer(150, 150));
     assert.deepEqual(pixels, beforeFill);
   } finally {

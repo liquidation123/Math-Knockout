@@ -42,7 +42,7 @@ const resultView = document.createElement("label");
 resultView.className = "result-view";
 resultView.innerHTML = 'View result as <select id="result-perspective">' +
   '<option value="">Spectator</option><option value="Blue">Blue</option><option value="Red">Red</option></select>';
-document.querySelector("#controls").insertBefore(resultView, status);
+document.querySelector(".controls-side").insertBefore(resultView, status);
 const resultPerspective = resultView.querySelector("select");
 const teamParam = new URLSearchParams(location.search).get("team");
 resultPerspective.value = TEAM_NAMES.find((name) => name.toLowerCase() === teamParam?.toLowerCase()) || (opponent.isAI ? "Blue" : "");
@@ -61,7 +61,14 @@ let preview = null;
 let previewKey = "";
 let reportedEliminations = new Set();
 let observedAttack = null;
+let roundStartedAt = 0;
+let roundEndedAt = null;
+let shotsFired = [0, 0];
+const roundTime = document.querySelector("#round-time");
 const equationInput = createEquationInput(() => { previewKey = ""; refreshPreview(); });
+// Desmos-style equation boxes. If MathLive cannot load, the plain text boxes still work.
+import("./math-field.js").then((module) => module.upgradeMathInputs())
+  .catch((error) => console.warn("Math boxes unavailable; using plain text inputs.", error));
 
 function resetRound() {
   opponent.cancel();
@@ -72,6 +79,9 @@ function resetRound() {
   previousTime = undefined;
   reportedEliminations = new Set();
   observedAttack = null;
+  roundStartedAt = Date.now();
+  roundEndedAt = null;
+  shotsFired = [0, 0];
   view.resetCinematic();
   if (activeCurve) view.removeCurve(activeCurve);
   if (previewCurve) view.removeCurve(previewCurve);
@@ -177,6 +187,7 @@ function updateSimulation(dt) {
   }
   if (round.attack && round.attack !== observedAttack) {
     observedAttack = round.attack;
+    shotsFired[round.players[round.attack.attackerIndex].team] += 1; // Human and AI shots both count.
     if (povToggle.checked) view.beginProjectilePOV(round.attack);
   }
   if (attack?.stopped && !wasStopped) console.info("Projectile stopped:", attack.reason);
@@ -209,21 +220,49 @@ function updateReadout() {
     const id = name.toLowerCase();
     document.querySelector("#" + id + "-health").value = alive.reduce((sum, player) => sum + player.health, 0);
     document.querySelector("#" + id + "-stats").textContent = alive.length + "/3 surviving";
-    document.querySelector("#" + id + "-characters").textContent = members.map((player) =>
-      player.name + ": " + (player.eliminated ? "OUT" : player.health + " HP") +
-      (round.players[round.selected[round.currentTeam]] === player && !round.result ? " ◀" : ""),
-    ).join("\n");
+    document.querySelector("#" + id + "-shots").textContent = shotsFired[team] + (shotsFired[team] === 1 ? " shot" : " shots");
+    renderMembers(document.querySelector("#" + id + "-characters"), members);
   });
   const selected = round.players[round.selected[round.currentTeam]];
   document.querySelector("#turn").textContent = round.result ? "Round complete" : TEAM_NAMES[round.currentTeam] + "'s turn";
   document.querySelector("#caster").textContent = round.result ? "" : selected.name + " selected";
   fire.disabled = Boolean(!mountainReady || !preview || preview.error || round.result || round.attack ||
     selected.eliminated || Math.abs(selected.position.z - 0.5) > 0.05 || (opponent.isAI && round.currentTeam === 1));
-  document.querySelectorAll(".math-input, #equation-type, #force, #symbols button, #implicit-options select, #launch-point").forEach((input) => {
+  document.querySelectorAll(".math-input, math-field, #equation-type, #force, #symbols button, #implicit-options select, #launch-point").forEach((input) => {
     input.disabled = opponent.isAI && round.currentTeam === 1;
   });
   if (status.textContent !== round.message) status.textContent = round.message;
+  showRoundTime();
   if (round.result) victory.show(round);
+}
+
+// Time taken this round as m:ss. The clock stops when the round has a result.
+function showRoundTime() {
+  if (round.result && roundEndedAt === null) roundEndedAt = Date.now();
+  const seconds = Math.floor(((roundEndedAt ?? Date.now()) - roundStartedAt) / 1000);
+  const text = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+  if (roundTime.textContent !== text) roundTime.textContent = text;
+}
+
+// One chip per character: name, HP and a small health bar. This runs every
+// frame, so the chips are rebuilt only when something actually changes.
+function renderMembers(list, members) {
+  const selected = round.result ? null : round.players[round.selected[round.currentTeam]];
+  const key = members.map((player) => player.name + player.health + player.eliminated + (player === selected)).join("|");
+  if (list.dataset.key === key) return;
+  list.dataset.key = key;
+  list.replaceChildren(...members.map((player) => {
+    const chip = document.createElement("span");
+    chip.className = "member" + (player === selected ? " selected" : "") + (player.eliminated ? " out" : "");
+    chip.style.setProperty("--hp", player.eliminated ? 0 : player.health / 100);
+    if (player === selected) chip.setAttribute("aria-current", "true");
+    const label = document.createElement("b");
+    label.textContent = player.name;
+    const hp = document.createElement("span");
+    hp.textContent = player.eliminated ? "OUT" : player.health + " HP";
+    chip.append(label, hp, document.createElement("i"));
+    return chip;
+  }));
 }
 
 function drawAttack() {

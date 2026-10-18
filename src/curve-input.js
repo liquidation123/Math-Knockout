@@ -82,6 +82,7 @@ export function createEquationInput(onChange) {
   document.querySelectorAll("[data-symbol]").forEach((button) => {
     button.addEventListener("pointerdown", (event) => event.preventDefault());
     button.addEventListener("click", () => {
+      if (activeField.insertSymbol) return activeField.insertSymbol(button.dataset.symbol);
       activeField.setRangeText(button.dataset.symbol, activeField.selectionStart, activeField.selectionEnd, "end");
       activeField.focus();
       activeField.dispatchEvent(new Event("input", { bubbles: true }));
@@ -90,9 +91,11 @@ export function createEquationInput(onChange) {
   document.querySelectorAll("[data-circle-direction]").forEach((button) => {
     button.addEventListener("click", () => {
       const prefix = type.value === "polar" ? "polar" : "parameter";
-      field(prefix + "-end").value = "(" + field(prefix + "-start").value + ")" +
+      const end = field(prefix + "-end");
+      end.value = "(" + field(prefix + "-start").value + ")" +
         (button.dataset.circleDirection === "1" ? "+" : "-") + "2π";
-      onChange();
+      // The input event refreshes the preview and the math box showing this field.
+      end.dispatchEvent(new Event("input", { bubbles: true }));
     });
   });
   start.addEventListener("input", () => { cardinal.value = "custom"; onChange(); });
