@@ -7,13 +7,12 @@
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 main { position: relative; width: 100%; height: 100dvh; overflow: hidden; background: #1686d8; }
-/* Same sky landscape as the home and creator pages, blurred so the arena stands out.
+/* Same sky landscape and shading as the home page (style.css .landscape + .sky-shade).
    The 3D renderer is transparent, so this shows behind the mountain. */
 main::before {
-  content: ''; position: absolute; inset: -30px;
-  background: linear-gradient(#06325c33, transparent 40%, #04223a66),
-    url('/assets/hero-landscape.jpg') center 60% / cover no-repeat;
-  filter: blur(6px) saturate(1.08);
+  content: ''; position: absolute; inset: 0; transform: scale(1.012);
+  background: linear-gradient(180deg, #063e7240 0%, #063e7214 25%, transparent 51%, transparent 73%, #03232c52 100%),
+    url('/assets/hero-landscape.jpg') center center / cover no-repeat;
 }
 #arena { position: absolute; inset: 0; }
 canvas { display: block; width: 100%; height: 100%; }
@@ -43,29 +42,38 @@ progress::-webkit-progress-bar { background: #2a3547; }
 .red progress::-moz-progress-bar { background: #ff8c99; }
 .character-list { white-space: pre-line; font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
 
-/* Top HUD: glass panel, team cards and one chip per character. */
+/* Panels use the home page's mode-card look: translucent navy, cream outline, rounded. */
 #hud, #controls {
-  padding: 12px 14px; border-radius: 14px; border-color: #ffffff1f;
-  background: linear-gradient(180deg, #172a42f2, #0d1828f2);
-  box-shadow: 0 10px 28px #0007, inset 0 1px 0 #ffffff14;
-  backdrop-filter: blur(6px);
+  padding: 12px 14px; border-radius: 20px; border-color: #fff8e873;
+  background: #113d5ee0; color: #fff8e8;
+  box-shadow: 0 14px 30px #02243740;
+  backdrop-filter: blur(8px);
+}
+#hud h1, #controls .turn-row strong, #hud .team-heading strong {
+  font-family: ui-rounded, "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif; font-weight: 900;
 }
 #hud .title-row { justify-content: flex-start; }
-#hud h1 { margin-right: auto; font-size: 19px; letter-spacing: 0.01em; }
+#hud h1 { margin-right: auto; color: #fff3d9; font-size: 20px; letter-spacing: 0.01em; text-shadow: 0 2px 0 #062b49; }
+/* Outline pill, like the home page's "How to play" button. */
 #hud .mode-link {
-  padding: 5px 11px; border: 1px solid #ffefb355; border-radius: 999px;
-  text-decoration: none; font-weight: 600; background: #ffefb30f;
+  padding: 5px 12px; border: 1px solid #fff8e8ad; border-radius: 999px; background: #04355e33;
+  color: #fff8e8; text-decoration: none; font-size: 10px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
 }
-#hud .mode-link:hover { background: #ffefb326; }
-#restart {
-  padding: 6px 14px; border: 0; border-radius: 999px; font-weight: 700;
-  background: linear-gradient(180deg, #4d9cff, #2f74d6); box-shadow: 0 2px 8px #2f74d666;
+#hud .mode-link:hover { background: #04355e80; }
+/* Cream pill with gold + navy "3D" edge, like the home page's play buttons. */
+#restart, #fire {
+  border: 3px solid #0e395a; border-radius: 999px; color: #123b5d; font-weight: 900;
+  background: linear-gradient(180deg, #fff9ed, #fff1d5);
+  box-shadow: 0 3px 0 #f8b22e, 0 6px 0 #0c3552; transition: transform 0.12s, box-shadow 0.12s;
 }
-#restart:hover { background: linear-gradient(180deg, #63aaff, #3a82e4); }
-#hud .character-note { margin: 6px 0 0; color: #9fb2c9; font-size: 12px; }
+#restart { margin-bottom: 6px; padding: 4px 14px; }
+#restart:hover, #fire:hover:not(:disabled) { background: #fffdf5; transform: translateY(2px); box-shadow: 0 1px 0 #f8b22e, 0 4px 0 #0c3552; }
+#restart:active, #fire:active:not(:disabled) { transform: translateY(5px); box-shadow: 0 0 0 #f8b22e, 0 1px 0 #0c3552; }
+#hud .character-note { margin: 6px 0 0; color: #d7e7f2; font-size: 12px; }
+#hud .character-note a { color: #ffd77a; }
 #hud .teams { gap: 10px; margin-top: 10px; }
 #hud .team {
-  padding: 8px 10px; border-radius: 10px;
+  padding: 8px 10px; border-radius: 12px;
   background: #ffffff08; border: 1px solid #ffffff12;
 }
 #hud .team.blue { background: linear-gradient(180deg, #76b7ff1c, #76b7ff08); border-color: #76b7ff38; }
@@ -103,12 +111,12 @@ progress::-webkit-progress-bar { background: #2a3547; }
   background: #ffef8b14; font-weight: 600;
 }
 #controls .type-row label {
-  color: #9fb2c9; font-size: 11px; font-weight: 700;
-  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+  color: #e3f5fa; font-size: 11px; font-weight: 900;
+  letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
 }
 #controls select, #controls .math-input {
   padding: 5px 9px; border: 1px solid #ffffff24; border-radius: 8px;
-  background: #0a1422cc; color: #edf2f8;
+  background: #082a45d9; color: #fff8e8;
 }
 #controls .math-input { font: 14px ui-monospace, "SF Mono", Menlo, monospace; }
 #controls select:hover, #controls .math-input:hover { border-color: #ffffff40; }
@@ -116,12 +124,8 @@ progress::-webkit-progress-bar { background: #2a3547; }
   outline: none; border-color: #76b7ff; box-shadow: 0 0 0 3px #76b7ff33;
 }
 #controls .math-input[aria-invalid="true"] { border-color: #ff9eac; box-shadow: 0 0 0 3px #ff9eac26; }
-#controls [data-equation-type] .equation-row { font-size: 13px; font-weight: 600; color: #c8d5e6; }
-#fire {
-  padding: 6px 20px; border: 0; border-radius: 999px; font-weight: 800; letter-spacing: 0.03em;
-  background: linear-gradient(180deg, #ff9a5c, #e8553a); box-shadow: 0 2px 10px #e8553a66;
-}
-#fire:hover:not(:disabled) { background: linear-gradient(180deg, #ffab73, #f06347); }
+#controls [data-equation-type] .equation-row { font-size: 13px; font-weight: 600; color: #e3f5fa; }
+#fire { margin-bottom: 6px; padding: 3px 22px; font-size: 15px; letter-spacing: 0.03em; }
 #controls .symbol-row { gap: 6px; margin-top: 6px; }
 #controls .symbol-row button {
   min-width: 34px; padding: 1px 10px; border: 1px solid #ffffff1f; border-radius: 999px;
@@ -133,10 +137,10 @@ progress::-webkit-progress-bar { background: #2a3547; }
   background: #ffffff08; border: 1px solid #ffffff12; font-weight: 600;
 }
 #controls #force-value {
-  padding: 2px 8px; border-radius: 999px; background: #0004; color: #9bd5ff;
+  padding: 2px 8px; border-radius: 999px; background: #0004; color: #ffd77a;
 }
-#controls #equation-help, #controls .anchoring-help { margin-top: 5px; color: #9fb2c9; font-size: 11px; }
-#controls .syntax-help summary { margin-top: 4px; color: #9bd5ff; font-weight: 600; }
+#controls #equation-help, #controls .anchoring-help { margin-top: 5px; color: #d7e7f2; font-size: 11px; }
+#controls .syntax-help summary { margin-top: 4px; color: #ffd77a; font-weight: 600; }
 #controls .pov-toggle, #controls .result-view {
   display: inline-flex; align-items: center; gap: 6px; margin: 6px 6px 0 0;
   padding: 2px 10px; border-radius: 999px; background: #ffffff0a; border: 1px solid #ffffff14;
@@ -212,7 +216,7 @@ summary { cursor: pointer; }
   .member span { font-size: 9px; }
   #controls .turn-row { font-size: 13px; margin-bottom: 4px; }
   #controls .type-row label { font-size: 10px; letter-spacing: 0.03em; }
-  #fire { padding: 5px 14px; }
+  #fire { padding: 2px 14px; }
   #controls .force-row { padding: 2px 8px; margin-top: 6px; }
   #controls #equation-help, #controls .anchoring-help { margin-top: 3px; font-size: 10px; line-height: 1.3; }
   #controls .pov-toggle, #controls .result-view { margin-top: 4px; padding: 1px 8px; font-size: 11px; }
