@@ -5,6 +5,7 @@ import { clipCurveSections } from "./terrain.js";
 import { PROJECTILE_RADIUS } from "./projectile.js";
 import { buildCartesianGrid, coordinateText } from "./grid.js";
 import { effectKind, pathLookAhead } from "./cinematic.js";
+import { projectilePlan } from "./attack-paths.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -22,7 +23,7 @@ export function createProjectileCamera() {
 }
 
 export function aimProjectileCamera(camera, attack, point = attack.position) {
-  const look = pathLookAhead(attack.path, point, attack.segment, 3);
+  const look = pathLookAhead(attack.lookPath || attack.path, point, attack.lookPath ? 1 : attack.segment, 3);
   camera.position.set(point.x - look.forward.x * 1.6, point.y - look.forward.y * 1.6, point.z);
   // Same height and a direct aim keep the bullet centered without Z tilt.
   camera.lookAt(point.x, point.y, point.z);
@@ -84,6 +85,20 @@ export function createAimGeometry(points, width) {
   return geometry;
 }
 
+export function createDotPreview(paths) {
+  const group = new THREE.Group();
+  group.renderOrder = 10; // Draw after transparent mountain art, like a visible aiming overlay.
+  for (const points of paths) {
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xe6a5ff, transparent: true, opacity: 1,
+        depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    dot.position.set(points[0].x, points[0].y, points[0].z);
+    dot.renderOrder = 10;
+    group.add(dot);
+  }
+  return group;
+}
+
 export function createView(container, hud, controls, mode = "projectile") {
   const scene = new THREE.Scene();
 
@@ -105,7 +120,6 @@ export function createView(container, hud, controls, mode = "projectile") {
   let cinematicTimer = 0;
   let impactPoint = null;
   let trailAttack = null;
-  let trailPoints = [];
   const effects = [];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -257,6 +271,19 @@ export function createView(container, hud, controls, mode = "projectile") {
   trail.renderOrder = 3;
   trail.visible = false;
   scene.add(trail);
+  const bulletViews = [{ projectile, trail, geometry: trailGeometry, points: [], teleportCount: 0 }];
+
+  function clearBulletViews() {
+    for (const extra of bulletViews.splice(1)) {
+      scene.remove(extra.projectile, extra.trail);
+      extra.geometry.dispose();
+    }
+    projectile.visible = trail.visible = false;
+    bulletViews[0].points = [];
+    bulletViews[0].teleportCount = 0;
+    trailGeometry.setDrawRange(0, 0);
+    trailAttack = null;
+  }
 
   function drawPlayers(players, selectedIndex = null) {
     playerMeshes.forEach((mesh, index) => {
@@ -341,28 +368,44 @@ export function createView(container, hud, controls, mode = "projectile") {
   playerMeshes.forEach((_, index) => setPlayerShape(index, null));
 
   function drawProjectile(attack) {
-    projectile.visible = Boolean(attack);
-    trail.visible = Boolean(attack);
     if (!attack) {
-      trailAttack = null;
-      trailPoints = [];
+      if (trailAttack) clearBulletViews();
       return;
     }
-    projectile.position.set(attack.position.x, attack.position.y, attack.position.z);
     if (attack !== trailAttack) {
+      clearBulletViews();
       trailAttack = attack;
-      trailPoints = [];
     }
-    const last = trailPoints[trailPoints.length - 1];
-    if (!last || last.distanceTo(projectile.position) > 0.03) {
-      trailPoints.push(projectile.position.clone());
-      if (trailPoints.length > trailLength) trailPoints.shift();
-      const positions = trailGeometry.getAttribute("position");
-      trailPoints.forEach((point, index) => positions.setXYZ(index, point.x, point.y, point.z));
-      positions.needsUpdate = true;
-      trailGeometry.setDrawRange(0, trailPoints.length);
-      trailGeometry.computeBoundingSphere();
-    }
+    (attack.bullets || [attack]).forEach((bullet, index) => {
+      if (!bulletViews[index]) {
+        const mesh = projectile.clone(true);
+        const geometry = trailGeometry.clone();
+        geometry.setDrawRange(0, 0);
+        const line = new THREE.Line(geometry, trail.material);
+        line.renderOrder = trail.renderOrder;
+        scene.add(mesh, line);
+        bulletViews.push({ projectile: mesh, trail: line, geometry, points: [], teleportCount: 0 });
+      }
+      const visual = bulletViews[index];
+      visual.projectile.position.set(bullet.position.x, bullet.position.y, bullet.position.z);
+      visual.projectile.visible = attack.dots
+        ? !bullet.inGap || bullet.flashUntil - attack.age > 0.08
+        : !(bullet.flashUntil - attack.age > 0.07);
+      visual.trail.visible = !attack.dots;
+      // Reset rather than drawing a luminous connector through a teleport gap.
+      if (visual.teleportCount !== bullet.teleportCount) visual.points = [];
+      visual.teleportCount = bullet.teleportCount;
+      const last = visual.points.at(-1);
+      if (!last || last.distanceTo(visual.projectile.position) > 0.03) {
+        visual.points.push(visual.projectile.position.clone());
+        if (visual.points.length > trailLength) visual.points.shift();
+        const positions = visual.geometry.getAttribute("position");
+        visual.points.forEach((point, i) => positions.setXYZ(i, point.x, point.y, point.z));
+        positions.needsUpdate = true;
+        visual.geometry.setDrawRange(0, visual.points.length);
+        visual.geometry.computeBoundingSphere();
+      }
+    });
   }
 
   function beginProjectilePOV(attack) {
@@ -407,13 +450,12 @@ export function createView(container, hud, controls, mode = "projectile") {
     cinematicMode = "bird";
     cinematicAttack = null;
     impactPoint = null;
-    trailAttack = null;
-    trailPoints = [];
-    trail.visible = false;
+    clearBulletViews();
     clearEffects();
   }
 
   function updateCinematic(attack, dt, enabled) {
+    attack = attack?.bullets?.[0] || attack; // Never switch to a different rational branch.
     if (!enabled) return;
     if (attack && !attack.stopped && attack !== cinematicAttack) beginProjectilePOV(attack);
     if (!cinematicAttack) return;
@@ -434,7 +476,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     const kind = effectKind(reason);
     if (!kind || !point) return;
     const enemy = kind === "enemy";
-    const color = enemy ? 0x9fffea : 0xffa34f;
+    const color = kind === "teleport" ? 0xcf8aff : enemy ? 0x9fffea : 0xffa34f;
     const group = new THREE.Group();
     group.position.set(point.x, point.y, point.z || 0.5);
     const flash = new THREE.Mesh(
@@ -566,6 +608,24 @@ export function createView(container, hud, controls, mode = "projectile") {
     });
   }
 
+  function drawAttackPreview(preview) {
+    const plan = projectilePlan(preview);
+    const group = preview.dots ? createDotPreview(plan.paths) : drawCurve(plan.paths, 0xfff26c, "aim");
+    if (preview.dots) {
+      scene.add(group);
+      return group;
+    }
+    for (const points of plan.paths.slice(1)) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 20),
+        new THREE.MeshBasicMaterial({ color: plan.mode === "teleport" ? 0xcf8aff : 0x67e5ff,
+          side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
+      ring.position.set(points[0].x, points[0].y, points[0].z + 0.02);
+      ring.renderOrder = 4;
+      group.add(ring);
+    }
+    return group;
+  }
+
   function resize() {
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -630,6 +690,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     drawProjectile,
     onCharacterClick,
     drawCurve,
+    drawAttackPreview,
     removeCurve,
     beginProjectilePOV,
     notifyProjectileStopped,

@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
 import { createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES } from "../src/combat.js";
 import { takeFixedSteps } from "../src/physics.js";
+import { actionPreview, equationText } from "../src/ai-types.js";
 
 const source = (await readFile(new URL("../src/main.js", import.meta.url), "utf8")).replace(/^import .+;\n/gm, "");
 async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, expression: "0", force: 1 })) {
@@ -19,14 +20,14 @@ async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, exp
   const opponent = { difficulty: "hard", isAI: true, cancel: () => { generation += 1; },
     token: () => generation, current: (token) => token === generation, wait: async () => true,
     choosing() {}, speak: async (name, text) => { spoken.push({ name, text }); return true; } };
-  const view = { ready: Promise.resolve(), resetCinematic() {}, removeCurve() {}, drawCurve() {}, onCharacterClick() {}, canvas: { focus() {} } };
+  const view = { ready: Promise.resolve(), resetCinematic() {}, removeCurve() {}, drawCurve() {}, drawAttackPreview() {}, onCharacterClick() {}, canvas: { focus() {} } };
   const api = runInNewContext(source + "\n;({ getRound: () => round, playAiTurn, resetRound });", {
     URLSearchParams, location: { search: "?opponent=hard" }, createOpponentUI: () => opponent,
     document: { querySelector: node, querySelectorAll: () => [], createElement: () => node("new-label") },
     window: { addEventListener(name, fn) { windowEvents[name] = fn; } },
     createView: () => view, createVictoryScreen: () => ({ hide() {}, show() {} }),
     createEquationInput: () => ({ key: () => "0", preview: (origin, direction) => buildPreview("0", origin, direction) }),
-    readSavedMask: async () => null, chooseProjectileAction, buildPreview,
+    readSavedMask: async () => null, chooseProjectileAction, buildPreview, actionPreview, equationText,
     createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES, takeFixedSteps, requestAnimationFrame() {},
     console: { info() {}, warn() {}, error: (...args) => errors.push(args) },
   });

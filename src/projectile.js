@@ -1,6 +1,7 @@
 import { COMBAT_Z, buildTrajectory } from "./equations.js";
 import { OBSTACLES, PLAYER_SIZE, applyKnockback } from "./physics.js";
 import { clipArenaSegment } from "./terrain.js";
+import { projectilePlan } from "./attack-paths.js";
 
 export const DAMAGE = 20;
 // Make even the lowest Force visibly move a one-unit cube against ground friction.
@@ -19,13 +20,22 @@ export function createAttack(attackerIndex, players, equation, time, preview = n
   const trajectory = preview || buildTrajectory(equation, attacker.position, attacker.team === 0 ? 1 : -1);
   const origin = trajectory.origin;
   const path = trajectory.path.map((point) => ({ ...point }));
+  const plan = projectilePlan(trajectory);
+  const paths = plan.paths.map((points) => points.map((point) => ({ ...point })));
+  const bullets = (plan.mode === "parallel" ? paths : [paths[0]]).map((points) => ({
+    path: points, position: { ...points[0] }, segment: 1, stopped: false, reason: "",
+    impactPoint: null, branch: 0, teleportCount: 0, flashUntil: 0, gapRemaining: null, inGap: false,
+  }));
+  if (trajectory.dots) bullets[0].lookPath = [paths[0][0], paths[1]?.[0] ||
+    { x: origin.x + (attacker.team === 0 ? 1 : -1), y: origin.y }];
   const capturedForce = Number.isFinite(force)
     ? Math.max(MIN_FORCE, Math.min(MAX_FORCE, force)) : DEFAULT_FORCE;
   return {
-    attackerIndex, equation, path,
+    attackerIndex, equation, path, paths, bullets, mode: plan.mode, dots: Boolean(trajectory.dots),
     force: capturedForce,
     hitEnemies: new Set(),
     hits: [],
+    impacts: [], teleports: [],
     origin: { x: origin.x, y: origin.y, z: COMBAT_Z },
     position: { x: origin.x, y: origin.y, z: COMBAT_Z },
     segment: 1,
@@ -100,22 +110,23 @@ export function firstCollision(start, end, players, attackerIndex, hitEnemies = 
   return first;
 }
 
-function travelSegment(attack, end, players) {
+function travelSegment(attack, bullet, end, players) {
   // Recheck the remaining segment after each enemy, so a nearer wall always wins.
-  while (!attack.stopped) {
-    const start = attack.position;
+  while (!bullet.stopped) {
+    const start = bullet.position;
     const collision = firstCollision(start, end, players, attack.attackerIndex, attack.hitEnemies);
     const t = collision ? collision.t : 1;
-    attack.position = {
+    bullet.position = {
       x: start.x + (end.x - start.x) * t,
       y: start.y + (end.y - start.y) * t,
       z: COMBAT_Z,
     };
     if (!collision) return;
     if (collision.reason !== "Enemy hit") {
-      attack.stopped = true;
-      attack.reason = collision.reason;
-      attack.impactPoint = { ...attack.position };
+      bullet.stopped = true;
+      bullet.reason = collision.reason;
+      bullet.impactPoint = { ...bullet.position };
+      attack.impacts.push({ reason: collision.reason, position: { ...bullet.position } });
       return;
     }
     attack.hitEnemies.add(collision.playerIndex);
@@ -124,38 +135,82 @@ function travelSegment(attack, end, players) {
     applyKnockback(players[attack.attackerIndex], target, KNOCKBACK * attack.force);
     attack.didHit = true;
     // Save collision points for cosmetic effects; they never apply damage.
-    attack.hits.push({ playerIndex: collision.playerIndex, position: { ...attack.position } });
+    attack.hits.push({ playerIndex: collision.playerIndex, position: { ...bullet.position } });
+  }
+}
+
+function updateBullet(attack, bullet, players, dt, firstStep) {
+  if (bullet.stopped) return;
+  if (firstStep) travelSegment(attack, bullet, bullet.position, players);
+  let distance = dt * PROJECTILE_SPEED;
+
+  // Spend distance, not X increments, to maintain speed along curved segments.
+  while (distance > 1e-10 && !bullet.stopped) {
+    const next = bullet.path[bullet.segment];
+    if (!next) {
+      if (attack.mode === "teleport" && attack.paths[bullet.branch + 1]) {
+        if (attack.dots) {
+          const destination = attack.paths[bullet.branch + 1][0];
+          // Spend the usual speed budget invisibly. Never sweep or draw this gap.
+          bullet.gapRemaining ??= Math.hypot(destination.x - bullet.position.x, destination.y - bullet.position.y);
+          const used = Math.min(distance, bullet.gapRemaining);
+          bullet.gapRemaining -= used;
+          distance -= used;
+          bullet.inGap = bullet.gapRemaining > 1e-10;
+          if (bullet.inGap) break;
+          bullet.gapRemaining = null;
+        }
+        const from = { ...bullet.position };
+        bullet.branch += 1;
+        bullet.path = attack.paths[bullet.branch];
+        bullet.position = { ...bullet.path[0] };
+        bullet.segment = 1;
+        bullet.teleportCount += 1;
+        bullet.flashUntil = attack.age + 0.12;
+        attack.teleports.push({ from, to: { ...bullet.position } });
+        // No swept gap: only the destination itself can collide during teleport.
+        travelSegment(attack, bullet, bullet.position, players);
+        continue;
+      }
+      bullet.stopped = true;
+      bullet.reason = attack.dots ? "End of discrete curve" : "End of continuous curve";
+      break;
+    }
+    const dx = next.x - bullet.position.x;
+    const dy = next.y - bullet.position.y;
+    const length = Math.hypot(dx, dy);
+    const used = Math.min(distance, length);
+    const ratio = length ? used / length : 1;
+    travelSegment(attack, bullet, {
+      x: bullet.position.x + dx * ratio,
+      y: bullet.position.y + dy * ratio,
+    }, players);
+    distance -= used;
+    if (used >= length - 1e-10) bullet.segment += 1;
   }
 }
 
 export function updateProjectile(attack, players, dt) {
-  const before = attack.age;
+  const firstStep = attack.age === 0;
   attack.age += dt;
   if (attack.stopped) return;
-
-  // The translated path starts at the shooter: no launch connector or delay.
-  if (before === 0) travelSegment(attack, attack.position, players);
-  let distance = (attack.age - before) * PROJECTILE_SPEED;
-
-  // Spend distance, not X increments, to maintain speed along curved segments.
-  while (distance > 1e-10 && !attack.stopped) {
-    const next = attack.path[attack.segment];
-    if (!next) {
-      attack.stopped = true;
-      attack.reason = "End of continuous curve";
-      break;
-    }
-    const dx = next.x - attack.position.x;
-    const dy = next.y - attack.position.y;
-    const length = Math.hypot(dx, dy);
-    const used = Math.min(distance, length);
-    const ratio = length ? used / length : 1;
-    travelSegment(attack, {
-      x: attack.position.x + dx * ratio,
-      y: attack.position.y + dy * ratio,
-    }, players);
-    distance -= used;
-    if (used >= length - 1e-10) attack.segment += 1;
+  for (const bullet of attack.bullets) updateBullet(attack, bullet, players, dt, firstStep);
+  const primary = attack.bullets[0];
+  if (attack.dots) {
+    const previous = attack.paths[Math.max(0, primary.branch - 1)][0];
+    const next = attack.paths[primary.branch + 1]?.[0];
+    primary.lookPath = [primary.position, next || {
+      x: primary.position.x + (primary.position.x - previous.x || (players[attack.attackerIndex].team === 0 ? 1 : -1)),
+      y: primary.position.y + primary.position.y - previous.y,
+    }];
   }
-  if (attack.stopped) attack.stoppedAt = attack.age;
+  // Keep the original single-bullet readouts for existing camera/game code.
+  attack.position = primary.position;
+  attack.segment = primary.segment;
+  attack.stopped = attack.bullets.every((bullet) => bullet.stopped);
+  if (attack.stopped) {
+    attack.reason = attack.bullets.find((bullet) => bullet.impactPoint)?.reason || primary.reason;
+    attack.impactPoint = primary.impactPoint;
+    attack.stoppedAt = attack.age;
+  }
 }

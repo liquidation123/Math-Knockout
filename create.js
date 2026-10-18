@@ -52,6 +52,8 @@ if (typeof document !== 'undefined') {
   arena.href = mode === 'bump' ? '/bump.html' : '/play.html';
   const opponent = new URLSearchParams(window.location?.search || '').get('opponent');
   if (['easy', 'medium', 'hard'].includes(opponent)) arena.href += '?opponent=' + opponent;
+  const aiType = new URLSearchParams(window.location?.search || '').get('aiType');
+  if (aiType && ['easy', 'medium', 'hard'].includes(opponent)) arena.href += '&aiType=' + encodeURIComponent(aiType);
   arena.textContent = mode === 'bump' ? 'Start Bump Duel →' : 'Start Projectile Duel →';
   const history = [];
   let tool = 'pencil';
@@ -81,6 +83,20 @@ if (typeof document !== 'undefined') {
     [...buttons, undo, clear].forEach(button => { button.disabled = true; });
     const character = { image: canvas.toDataURL('image/png'), inkUsed: used(), width: WIDTH, height: HEIGHT };
     window.outMathedCharacter = character;
+    const gameMode = mode === 'bump' ? 'bump' : 'projectile';
+    const opponentType = ['easy', 'medium', 'hard'].includes(opponent) ? 'ai' : 'human';
+    const inkUsed = Number(character.inkUsed.toFixed(2));
+    window.posthog?.capture('character_created', {
+      game_mode: gameMode,
+      opponent_type: opponentType,
+      ink_used: inkUsed,
+    });
+    window.posthog?.logger?.info('character creation completed', {
+      event: 'character_creation_completed',
+      game_mode: gameMode,
+      opponent_type: opponentType,
+      ink_used: inkUsed,
+    });
     try {
       sessionStorage.setItem('outMathedCharacter', JSON.stringify(character));
       say('Time! Your character is saved. Start your selected game mode below.');

@@ -1,4 +1,4 @@
-import { buildPreview } from "./equations.js";
+import { buildCurvePreview } from "./curves.js";
 import { ARENA, PLAYER_SIZE, applyImpulse, createPlayer, insideArena, movePlayerXY, updatePlayer } from "./physics.js";
 
 const LAUNCH_SPEED = 7.5;
@@ -27,7 +27,7 @@ export function bumpDirection(players, side) {
 export function lockEquation(duel, side, expression) {
   if (duel.phase !== "planning" || duel.locked[side]) return "Already locked.";
   const player = duel.players[side];
-  const preview = buildPreview(expression, player.position, bumpDirection(duel.players, side));
+  const preview = buildCurvePreview(expression, player.position, bumpDirection(duel.players, side));
   if (preview.error) return preview.error;
   if (preview.path.length < 2) return "Choose a path with room to move.";
   duel.paths[side] = { points: preview.path, index: 0, speed: LAUNCH_SPEED, expression };

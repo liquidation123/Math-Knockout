@@ -9,6 +9,10 @@ if (bumpServerUrl) duelSocketUrl("https://example.com/bump.html?room=build-check
 // Rebuild only the generated public folder. The local development server is unchanged.
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
+await writeFile(new URL("posthog-config.json", output), JSON.stringify({
+  projectToken: process.env.POSTHOG_PROJECT_TOKEN,
+  host: process.env.POSTHOG_HOST,
+}));
 for (const file of [
   "index.html", "create.html", "play.html", "bump.html", "victory.html",
   "style.css", "create.css", "game.css", "duel.css", "opponent.css", "victory.css", "create.js", "src",

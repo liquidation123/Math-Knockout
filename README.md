@@ -24,19 +24,20 @@ with the same room ID; plain `/play.html` always starts Projectile Duel.
 
 ## AI opponents
 
-Both game pages have an **Opponent** selector. Human is the default; AI matches
-always put you on Blue and the AI on Red. Changing that selector reloads a fresh
+Both game pages have separate **Opponent**, **AI Type**, and **Difficulty** selectors.
+Human is the default; AI matches always put you on Blue and the AI on Red.
+Changing any selector reloads a fresh
 match and cancels pending decisions/dialogue. Drawings and human equation types
 are preserved. Projectile aiming now uses a bright yellow ribbon with a dark
 outline, centered on exactly the original sampled trajectory.
 
-- **Easy** uses approximate lines, normal Force and occasional controlled aiming errors.
-- **Medium** compares a few lines, arcs and waves with the existing collision/physics simulation.
+- **Easy** uses one approximate type-appropriate curve, normal Force and occasional controlled aiming errors.
+- **Medium** compares several type-appropriate routes with the existing collision/physics simulation.
 - **Hard** compares more curves and forces, penalizes unsafe recoil/landings, and
   chooses the best predicted result. It has no health, damage, speed or mass bonus.
 
 Projectile search checks at most 81 choices (Medium 36); each uses at most eight
-seconds of fixed-step simulation. Bump search checks at most ten curves against
+seconds of fixed-step simulation. Bump search checks at most twelve curves against
 four hypothetical public-state Blue choices. Each trial yields to the browser;
 no external AI, API keys or new dependencies are used. These bounded predictions
 are imperfect and Hard is not guaranteed to win.
@@ -59,6 +60,57 @@ and firing use that same direction; the captured path never homes during flight.
 Reproducible regressions in `tests/ai.test.js` compare the three levels at a
 projectile recoil edge and in open-summit Bump encounters, checking decision quality
 without treating those examples as a win-rate benchmark.
+
+### AI types and disconnected shots
+
+Type restricts equations, never health or physics. Parametric uses `x(t), y(t)`;
+Polar uses complete circles or cardioids in `r(θ)` form, never near-straight spirals;
+Absolute uses real absolute-value bends; Trig uses waves;
+Rational uses a nonconstant polynomial denominator. Normal compares all supported
+families, including implicit curves, exponentials, logarithms and roots. Easy has
+one simple candidate; higher levels explore more. Dot is Projectile-only: its
+domain is isolated x-values, not rational/asymptote sections. Bump deliberately
+omits Dot because characters require continuous movement and must never teleport.
+
+In Projectile Duel, an explicit rational graph launches one bullet per sampled
+playable branch. The graph is translated once; only the launch branch begins at
+the shooter. Cyan rings mark other bullet starts. Non-rational disconnected curves
+use one teleporting bullet; purple rings mark arrivals. Dot uses a single bullet
+and purple point markers with no connecting curves. Explicit teleports visit later branches
+in the team's X direction. Parameter/polar branches retain parameter order;
+implicit branches follow the selected branch, then displayed branch-index order.
+
+Teleports have no connector, swept gap, or gap damage. Arrival points are checked
+immediately, and a wall or map exit stops the bullet rather than allowing a jump.
+Every bullet in an attack shares one hit set. An enemy takes damage/knockback at
+most once per attack; recoil occurs once using the launch branch. Turns and victory
+wait for all bullets and the existing impact pause. The camera follows only the
+launch bullet, cuts on teleports, and trails reset across gaps. Bump characters use
+only one continuous launch branch: they never teleport or spawn extra characters.
+
+Players can select **Discrete dots** in Projectile Duel. This is exactly Dot AI's
+ability: sample any supported `y=f(x)` at x=0, ±2, ±4, …, ±32 in the team's firing
+direction, plus one optional extra x-value (AI uses the target's public relative x).
+The whole point set is translated once. Every interval is an undefined gap in
+this discrete domain: no interpolation, trail, or collision connector. Inter-dot
+timing is distance/projectile-speed while the bullet disappears, then it cuts to
+the destination with a flash and checks collision. Normal equation input retains
+circles/cardioids, absolute, trig, rational and all other AI-supported families.
+
+Numerical limits remain important: 1,280 sampling intervals, explicit x in [−32,32],
+and the existing implicit 0.25-unit contour grid in [−16,16]². Very narrow domain
+gaps, tiny loops, and highly oscillatory functions can be missed. Rational detection
+uses the existing parser's arithmetic/integer-power tokens for explicit functions;
+it is not symbolic simplification of arbitrary equivalent expressions. AI searches
+use these same sampled branches and actual combat rules, with bounded lookahead.
+If an explicit function is undefined at zero, its automatic anchor now prefers
+a finite sample at least one unit in the firing direction, avoiding the near-pole
+`1/x` anchor at x=0.05 that looked like a vertical line and exited immediately.
+Narrow domains retain a near-zero fallback; functions defined at zero are unchanged.
+The input is never rewritten, and a short note explains any nonzero launch anchor.
+`tests/ai-types.test.js` checks all 21 Projectile and 18 supported Bump type/difficulty pairs;
+`tests/branch-projectiles.test.js` covers both directions, real gaps/asymptotes,
+arrival collisions, shared hits, frozen paths, recoil, camera cuts and completion.
 
 ## Shared mountain and deliberate adaptations
 

@@ -6,6 +6,7 @@ import { buildPreview } from "../src/equations.js";
 import { createDuel, travelPath, lockEquation, launchDuel, updateDuel, inkFromMask, setShapePhysics, bumpDirection } from "../src/duel.js";
 import { insideArena, takeFixedSteps } from "../src/physics.js";
 import { publicBumpState } from "../src/ai.js";
+import { equationText } from "../src/ai-types.js";
 import { duelSocketUrl } from "../src/duel-connection.js";
 
 // Run the real client with a fake DOM/socket, without needing WebGL in Node.
@@ -49,7 +50,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     document: { querySelector: element, querySelectorAll: () => [] }, window: { addEventListener(name, handler) { windowEvents[name] = handler; } },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
     buildPreview, travelPath, insideArena, takeFixedSteps, createDuel, lockEquation, launchDuel, updateDuel, inkFromMask, setShapePhysics, bumpDirection,
-    createOpponentUI: () => opponent, publicBumpState, chooseBumpAction,
+    createOpponentUI: () => opponent, publicBumpState, chooseBumpAction, equationText,
     duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame(fn) { if (fn.name === "frame") frames.push(fn); },
     console: { error: (...args) => errors.push(args), warn() {} },
   });

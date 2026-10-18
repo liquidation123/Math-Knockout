@@ -6,6 +6,7 @@ import { readSavedMask } from "./saved-character.js";
 import { duelSocketUrl } from "./duel-connection.js";
 import { chooseBumpAction, publicBumpState } from "./ai.js";
 import { createOpponentUI } from "./opponent-ui.js";
+import { equationText } from "./ai-types.js";
 
 const $ = (selector) => document.querySelector(selector);
 const opponent = createOpponentUI();
@@ -137,9 +138,27 @@ socket?.addEventListener("message", ({ data }) => {
 
 function receiveState(message) {
   const oldPhase = state?.phase;
+  const wasLocalPathLocked = state?.locked?.[message.side];
   state = message;
   updateLoading();
+  if (!wasLocalPathLocked && state.locked[state.side]) {
+    window.posthog?.capture("bump_path_locked", {
+      opponent_type: opponent.isAI ? "ai" : "human",
+    });
+  }
   if (oldPhase !== "finished" && state.phase === "finished") {
+    const localTeam = state.side === 0 ? "Blue" : "Red";
+    const opponentType = opponent.isAI ? "ai" : "human";
+    const outcome = state.winner === "Draw" ? "draw" : state.winner === localTeam ? "win" : "loss";
+    window.posthog?.capture("bump_duel_completed", {
+      opponent_type: opponentType,
+      outcome,
+    });
+    window.posthog?.logger?.info("bump duel completed", {
+      event: "bump_duel_completed",
+      opponent_type: opponentType,
+      outcome,
+    });
     summitView = true;
     view.setViewMode("summit");
     $("#view").textContent = "First person";
@@ -158,7 +177,7 @@ function receiveState(message) {
     view.setViewMode("follow");
     summitView = false;
     // Red's committed equation is revealed only AFTER Blue has also locked.
-    if (opponent.isAI && aiEquation) opponent.speak("Red", "y = " + aiEquation, opponent.token());
+    if (opponent.isAI && aiEquation) opponent.speak("Red", equationText(aiEquation), opponent.token());
   }
   if (state.phase === "running" && previewLine) { view.removeCurve(previewLine); previewLine = null; }
   updateScreen();
@@ -209,6 +228,7 @@ async function playBumpAi() {
   try {
     await opponent.wait(150, token);
     const expression = await chooseBumpAction(publicState, opponent.difficulty, {
+      type: opponent.type,
       pause: () => opponent.wait(0, token), cancelled: () => !opponent.current(token) || leaving,
     });
     if (!opponent.current(token) || !expression || leaving || soloDuel.phase !== "planning" || soloDuel.locked[1] || soloDuel.players[1].eliminated) return;
@@ -251,6 +271,9 @@ $("#again").addEventListener("click", restart);
 $("#invite").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(location.href);
+    window.posthog?.capture("bump_invite_copied", {
+      opponent_type: "human",
+    });
     $("#invite").textContent = "Link copied ✓";
     setTimeout(() => $("#invite").textContent = "Invite friend ↗", 1600);
   } catch { $("#error").textContent = "Copy failed. Share the URL in your address bar."; }

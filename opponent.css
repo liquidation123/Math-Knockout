@@ -1,6 +1,7 @@
 .opponent-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 7px; font: 12px system-ui; }
 .opponent-row select { padding: 5px; border: 1px solid #91a8be; border-radius: 5px; background: #142c43; color: #fff; font: inherit; }
 #opponent-help { flex: 1; min-width: 130px; font-size: 11px; opacity: .85; }
+#ai-type-help { font-size: 11px; opacity: .85; }
 #ai-thinking { color: #ffb9c2; font-size: 12px; margin: 5px 0 0; }
 #hud .brand ~ #ai-thinking { color: #9c3045; }
 #ai-dialogue { margin-top: 6px; padding: 7px 10px; border-left: 3px solid #ff899b; background: #142c43; color: #fff; border-radius: 5px; font: 12px system-ui; }

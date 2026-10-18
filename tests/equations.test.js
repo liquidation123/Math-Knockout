@@ -151,10 +151,10 @@ test("horizontal shifts retain their shape and vertex while anchoring both teams
   }
 });
 
-test("undefined zero uses the first finite sample in the firing direction, translating X and Y", () => {
+test("undefined zero prefers a finite anchor one unit away, translating X and Y", () => {
   const origin = { x: 3.1, y: -1.7 };
   for (const [text, direction, expectedX] of [
-    ["1/x", 1, 0.05], ["1/x", -1, -0.05], ["ln(x)", 1, 0.05],
+    ["1/x", 1, 1], ["1/x", -1, -1], ["ln(x)", 1, 1],
     ["sqrt(x-1)", 1, 1], ["sqrt(-x-1)", -1, -1],
     ["sqrt(x-1)", -1, 32], ["ln(-x)", 1, -32],
   ]) {
@@ -168,6 +168,12 @@ test("undefined zero uses the first finite sample in the firing direction, trans
       close(point.y - origin.y, preview.equation.evaluate(originalX) - preview.anchor.y);
     }
   }
+});
+
+test("a narrow real domain still falls back to a near-zero finite sample", () => {
+  const preview = buildPreview("sqrt(x*(0.1-x))/x", { x: 0, y: 0 }, 1);
+  assert.equal(preview.error, "");
+  close(preview.anchor.x, 0.05);
 });
 
 test("single-point real branches may fire, while no real launch point reports an error", () => {

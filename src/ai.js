@@ -1,12 +1,12 @@
-import { buildPreview } from "./equations.js";
 import { firePreview, selectCharacter, updateRound } from "./combat.js";
 import { createDuel, launchDuel, lockEquation, updateDuel, bumpDirection } from "./duel.js";
 import { FIXED_STEP, insideArena } from "./physics.js";
+import { actionPreview, typeEquations } from "./ai-types.js";
 
 export const AI_LEVELS = {
   easy: { description: "Simple lines, rough aim and occasional mistakes.", projectileLimit: 1, bumpLimit: 1 },
-  medium: { description: "Compares several routes and landing safety.", projectileLimit: 36, bumpLimit: 7 },
-  hard: { description: "Simulates more choices, force and survival risks. Not unbeatable.", projectileLimit: 81, bumpLimit: 10 },
+  medium: { description: "Compares several routes and landing safety.", projectileLimit: 36, bumpLimit: 12 },
+  hard: { description: "Simulates more choices, force and survival risks. Not unbeatable.", projectileLimit: 81, bumpLimit: 12 },
 };
 const copyPlayers = (players) => players.map((player) => ({
   name: player.name, team: player.team, eliminated: player.eliminated,
@@ -29,11 +29,25 @@ function aimedCurve(from, to, bend) {
   return bend === 0 ? `${number(slope)}*x` : `(${bend})*x^2+(${number(slope)})*x`;
 }
 
-export function projectileCandidates(round, difficulty, random = Math.random) {
+export function projectileCandidates(round, difficulty, random = Math.random, type = null) {
   const shooters = round.players.map((player, index) => ({ player, index })).filter(({ player }) =>
     player.team === 1 && !player.eliminated && player.health > 0 && Math.abs(player.position.z - 0.5) < 0.05);
   const targets = round.players.filter((player) => player.team === 0 && !player.eliminated && player.health > 0);
   if (!shooters.length || !targets.length) return [];
+  if (type) {
+    const actions = [];
+    const eligible = difficulty === "easy" ? [shooters[Math.floor(random() * shooters.length)]] : shooters;
+    for (const { player, index } of eligible) {
+      const nearest = [...targets].sort((a, b) => distance(a.position, player.position) - distance(b.position, player.position));
+      for (const target of nearest.slice(0, difficulty === "easy" ? 1 : 2)) {
+        for (const input of typeEquations(player.position, target.position, -1, type, difficulty, "projectile", random)) {
+          actions.push({ playerIndex: index, input, aiType: type, expression: typeof input === "string" ? input : "", force: difficulty === "hard" ? 1.8 : 1 });
+        }
+      }
+    }
+    const forces = difficulty === "hard" ? [0.5, 3] : [];
+    return [...actions, ...forces.flatMap((force) => actions.map((action) => ({ ...action, force })))].slice(0, AI_LEVELS[difficulty].projectileLimit);
+  }
   if (difficulty === "easy") {
     const shooter = shooters[Math.floor(random() * shooters.length)];
     const target = [...targets].sort((a, b) => distance(a.position, shooter.player.position) - distance(b.position, shooter.player.position))[0];
@@ -53,7 +67,7 @@ export function projectileCandidates(round, difficulty, random = Math.random) {
 
 export function scoreProjectileAction(round, action, difficulty) {
   const trial = { ...round, players: copyPlayers(round.players), selected: [...round.selected], attack: null, result: null, automatic: false };
-  const preview = buildPreview(action.expression, trial.players[action.playerIndex].position, -1);
+  const preview = actionPreview(action, trial.players[action.playerIndex].position, -1);
   if (!selectCharacter(trial, action.playerIndex) || !firePreview(trial, action.playerIndex, preview, action.force)) return -Infinity;
   // These are the same fixed physics steps, swept collisions, piercing and recoil as gameplay.
   const seconds = difficulty === "hard" ? 8 : 6;
@@ -73,10 +87,10 @@ export async function chooseProjectileAction(round, difficulty, options = {}) {
   const { random = Math.random, pause = wait, cancelled = () => false } = options;
   round = { ...round, players: copyPlayers(round.players), selected: [...round.selected] };
   let best = null, bestScore = -Infinity;
-  for (const action of projectileCandidates(round, difficulty, random)) {
+  for (const action of projectileCandidates(round, difficulty, random, options.type)) {
     if (cancelled()) return null;
     const score = difficulty === "easy"
-      ? (buildPreview(action.expression, round.players[action.playerIndex].position, -1).error ? -Infinity : 0)
+      ? (actionPreview(action, round.players[action.playerIndex].position, -1).error ? -Infinity : 0)
       : scoreProjectileAction(round, action, difficulty);
     if (score > bestScore) { best = action; bestScore = score; }
     // Yield after EVERY candidate rather than pausing the render loop for the whole search.
@@ -90,9 +104,12 @@ export function publicBumpState(duel) {
   return { players: copyPlayers(duel.players) };
 }
 
-export function bumpCandidates(publicState, difficulty, random = Math.random) {
+export function bumpCandidates(publicState, difficulty, random = Math.random, type = null) {
   const [blue, red] = publicState.players;
   if (blue.eliminated || red.eliminated) return [];
+  if (type === "dot") return []; // Point-only attacks cannot move a Bump character.
+  if (type) return typeEquations(red.position, blue.position, bumpDirection(publicState.players, 1), type,
+    difficulty, "bump", random).slice(0, AI_LEVELS[difficulty].bumpLimit);
   if (difficulty === "easy") {
     let slope = Math.round(slopeTo(red.position, blue.position) * 4) / 4;
     if (random() < 0.3) slope += 0.3;
@@ -139,12 +156,12 @@ export async function chooseBumpAction(publicState, difficulty, options = {}) {
   const guesses = difficulty === "hard"
     ? [...new Set(["0", `${number(slopeTo(blue.position, red.position))}*x`, "0.25*x", "-0.25*x"])] : ["0"];
   let best = null, bestScore = -Infinity;
-  for (const expression of bumpCandidates(publicState, difficulty, random)) {
+  for (const expression of bumpCandidates(publicState, difficulty, random, options.type)) {
     const scores = [];
     for (const guess of guesses) {
       if (cancelled()) return null;
       scores.push(difficulty === "easy"
-        ? (buildPreview(expression, red.position, bumpDirection(publicState.players, 1)).error ? -Infinity : 0)
+        ? (actionPreview(expression, red.position, bumpDirection(publicState.players, 1)).error ? -Infinity : 0)
         : scoreBumpAction(publicState, expression, guess));
       await pause();
     }

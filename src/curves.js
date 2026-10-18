@@ -1,4 +1,4 @@
-import { buildPreview, compileExpression, COMBAT_Z, SAMPLE_COUNT } from "./equations.js";
+import { buildPreview, parseEquation, compileExpression, COMBAT_Z, SAMPLE_COUNT } from "./equations.js";
 import { traceImplicit, implicitPath } from "./implicit-curves.js";
 
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -45,7 +45,8 @@ export function sampleParameter(evaluate, start, end) {
   }
   const anchor = evaluate(start);
   if (!finite(anchor)) throw new Error("The curve is undefined at the chosen start. Change the start value.");
-  const path = [anchor];
+  const branches = [];
+  let path = [anchor];
   let warning = "";
   let closed = false;
   for (let index = 1; index <= SAMPLE_COUNT; index += 1) {
@@ -54,13 +55,15 @@ export function sampleParameter(evaluate, start, end) {
     const point = evaluate(after);
     // Midpoint tests catch common poles and steps instead of bridging them.
     const middle = evaluate((before + after) / 2);
-    const gap = !finite(point) || Math.abs(point.x - anchor.x) > 1000 ||
-      Math.abs(point.y - anchor.y) > 1000 || hasBreak(path.at(-1), point, middle);
-    if (gap) {
-      warning = "Path stops at the first detected undefined break or sampling limit.";
-      break;
+    const valid = finite(point) && Math.abs(point.x - anchor.x) <= 1000 && Math.abs(point.y - anchor.y) <= 1000;
+    const gap = !valid || (path.length && hasBreak(path.at(-1), point, middle));
+    if (gap || !finite(middle)) {
+      if (path.length) branches.push({ points: path, closed: false });
+      path = [];
+      warning = "Detected breaks split the trajectory. Bump characters use only the launch branch.";
     }
-    if (completesLoop(path, point)) {
+    if (!valid) continue;
+    if (!branches.length && completesLoop(path, point)) {
       path.push({ ...anchor });
       closed = true;
       break;
@@ -68,13 +71,34 @@ export function sampleParameter(evaluate, start, end) {
     path.push(point);
   }
   // A closed parameter interval makes one ordered pass; repeat no extra endpoint.
-  closed ||= path.length === SAMPLE_COUNT + 1 && distance(path[0], path.at(-1)) < 1e-7;
+  closed ||= !branches.length && path.length === SAMPLE_COUNT + 1 && distance(path[0], path.at(-1)) < 1e-7;
   if (closed) path[path.length - 1] = { ...path[0] };
-  return { branches: [{ points: path, closed }], warning };
+  if (path.length) branches.push({ points: path, closed });
+  return { branches, warning };
 }
 
 export function createCurveModel(request) {
   if (request.type === "explicit") return { type: "explicit", expression: request.expression };
+  if (request.type === "dots") {
+    const equation = parseEquation(request.expression);
+    const direction = request.direction === -1 ? -1 : 1;
+    const branches = [];
+    // The domain is explicitly discrete, not a guess from near-asymptote samples.
+    const domain = Array.from({ length: 17 }, (_, index) => direction * index * 2);
+    const targetX = request.extra?.trim() ? readBound(request.extra) : request.targetX;
+    if (targetX !== undefined) {
+      if (!Number.isFinite(targetX) || targetX * direction < 0 || Math.abs(targetX) > 32) {
+        throw new Error("Extra dot x must be within 32 units in your firing direction.");
+      }
+      domain.push(targetX);
+    }
+    for (const x of [...new Set(domain)].sort((a, b) => direction * (a - b))) {
+      const y = equation.evaluate(x);
+      if (Number.isFinite(y)) branches.push({ points: [{ x, y }], closed: false });
+    }
+    if (!branches.length) throw new Error("No finite points in this discrete domain.");
+    return { type: "dots", branches, equation: { ...equation, name: equation.name + " · discrete x", rational: false } };
+  }
   if (request.type === "implicit") return traceImplicit(request.expression);
   const start = readBound(request.start);
   const end = readBound(request.end);
@@ -113,6 +137,19 @@ export function previewCurveModel(model, origin, direction = 1, selection = {}) 
   const anchor = points[0];
   const path = translatePath(points, anchor, origin);
   const sections = model.branches.map((branch) => translatePath(branch.points, anchor, origin));
+  // Implicit branches use their displayed index order after the chosen launch branch.
+  const remaining = model.type === "implicit"
+    ? model.branches.filter((_, index) => index !== chosen.branch).map((branch) =>
+      translatePath(selection.direction === "reverse" ? [...branch.points].reverse() : branch.points, anchor, origin))
+    : sections.slice(1);
   return { equation: model.equation, origin: { x: origin.x, y: origin.y },
-    path, sections, anchor, selection: chosen, warning: model.warning, error: "" };
+    path, sections, travelSections: [path, ...remaining], dots: model.type === "dots",
+    anchor, selection: chosen, warning: model.warning, error: "" };
+}
+
+export function buildCurvePreview(input, origin, direction = 1) {
+  if (typeof input === "string") return buildPreview(input, origin, direction);
+  try {
+    return previewCurveModel(createCurveModel(input.type === "dots" ? { ...input, direction } : input), origin, direction, input.selection);
+  } catch (error) { return { error: error.message, sections: [], path: [] }; }
 }

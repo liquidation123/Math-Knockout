@@ -4,9 +4,9 @@ import { readSavedMask } from "./saved-character.js";
 import { createView } from "./scene.js";
 import { takeFixedSteps } from "./physics.js";
 import { createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES } from "./combat.js";
-import { buildPreview } from "./equations.js";
 import { chooseProjectileAction } from "./ai.js";
 import { createOpponentUI } from "./opponent-ui.js";
+import { actionPreview, equationText } from "./ai-types.js";
 
 const opponent = createOpponentUI();
 let aiPending = false, aiFailed = false, leaving = false;
@@ -101,7 +101,7 @@ function refreshPreview() {
   if (previewCurve) view.removeCurve(previewCurve);
   if (branchCurve) view.removeCurve(branchCurve);
   branchCurve = preview?.selection ? view.drawCurve(preview.sections, 0x71849e, true) : null;
-  previewCurve = preview && !preview.error ? view.drawCurve([preview.path], 0xfff26c, "aim") : null;
+  previewCurve = preview && !preview.error ? view.drawAttackPreview(preview) : null;
   document.querySelectorAll(".math-input").forEach((input) => input.setAttribute("aria-invalid",
     String(Boolean(preview?.error) && !input.closest("[data-equation-type]").hidden)));
   errorLabel.textContent = preview?.error || "";
@@ -130,6 +130,10 @@ fire.addEventListener("click", () => {
   if (opponent.isAI && round.currentTeam === 1) return;
   refreshPreview();
   if (firePreview(round, round.selected[round.currentTeam], preview, Number(forceSlider.value))) {
+    window.posthog?.capture("projectile_attack_fired", {
+      opponent_type: opponent.isAI ? "ai" : "human",
+      force: Number(forceSlider.value),
+    });
     console.info("Fired", round.players[round.attack.attackerIndex].name, round.attack.equation.name);
     view.canvas.focus({ preventScroll: true });
     updateReadout();
@@ -146,6 +150,7 @@ async function playAiTurn() {
   try {
     await opponent.wait(150, token);
     const action = await chooseProjectileAction(activeRound, opponent.difficulty, {
+      type: opponent.type,
       pause: () => opponent.wait(0, token), cancelled: () => !opponent.current(token),
     });
     if (!opponent.current(token) || !action || round.result || round.currentTeam !== 1 || round.attack) return;
@@ -153,9 +158,9 @@ async function playAiTurn() {
     const player = round.players[action.playerIndex];
     if (player.eliminated || Math.abs(player.position.z - 0.5) > 0.05) return;
     if (!selectCharacter(round, action.playerIndex)) return;
-    if (!await opponent.speak(player.name, `y = ${action.expression} · Force ${action.force}×`, token)) return;
+    if (!await opponent.speak(player.name, `${equationText(action.input || action.expression)} · Force ${action.force}×`, token)) return;
     if (!opponent.current(token) || player.eliminated || round.result) return;
-    const aim = buildPreview(action.expression, player.position, -1);
+    const aim = actionPreview(action, player.position, -1);
     firePreview(round, action.playerIndex, aim, action.force);
   } catch (error) {
     if (opponent.current(token)) { aiFailed = true; round.message = "AI could not choose. Restart to retry."; console.error("Projectile AI:", error); }
@@ -168,8 +173,10 @@ function updateSimulation(dt) {
   if (round.result) return;
   const teamBefore = round.currentTeam;
   const attack = round.attack;
-  const wasStopped = attack?.stopped;
+  const wasStopped = attack?.bullets[0].stopped;
   const hitsBefore = attack?.hits.length || 0;
+  const impactsBefore = attack?.impacts.length || 0;
+  const teleportsBefore = attack?.teleports.length || 0;
   updateRound(round, dt);
   for (const hit of attack?.hits.slice(hitsBefore) || []) {
     view.createImpact("Enemy hit", hit.position);
@@ -177,12 +184,16 @@ function updateSimulation(dt) {
   }
   if (round.attack && round.attack !== observedAttack) {
     observedAttack = round.attack;
-    if (povToggle.checked) view.beginProjectilePOV(round.attack);
+    if (povToggle.checked) view.beginProjectilePOV(round.attack.bullets[0]);
   }
-  if (attack?.stopped && !wasStopped) console.info("Projectile stopped:", attack.reason);
-  if (attack?.stopped && !wasStopped) {
-    view.createImpact(attack.reason, attack.impactPoint || attack.position);
-    view.notifyProjectileStopped(attack);
+  for (const impact of attack?.impacts.slice(impactsBefore) || []) view.createImpact(impact.reason, impact.position);
+  for (const jump of attack?.teleports.slice(teleportsBefore) || []) {
+    view.createImpact("Teleport", jump.from);
+    view.createImpact("Teleport", jump.to);
+  }
+  if (attack?.bullets[0].stopped && !wasStopped) {
+    console.info("Projectile stopped:", attack.bullets[0].reason);
+    view.notifyProjectileStopped(attack.bullets[0]);
   }
   round.players.forEach((player, index) => {
     if (player.eliminated && !reportedEliminations.has(index)) {
@@ -191,6 +202,17 @@ function updateSimulation(dt) {
     }
   });
   if (round.result) {
+    const opponentType = opponent.isAI ? "ai" : "human";
+    const winningTeam = round.result.winner.toLowerCase();
+    window.posthog?.capture("projectile_round_completed", {
+      winner: winningTeam,
+      opponent_type: opponentType,
+    });
+    window.posthog?.logger?.info("projectile round completed", {
+      event: "projectile_round_completed",
+      winner: winningTeam,
+      opponent_type: opponentType,
+    });
     opponent.cancel();
     aiPending = false;
     console.info("Round complete", round.result);
@@ -229,7 +251,9 @@ function updateReadout() {
 function drawAttack() {
   if (round.attack === drawnAttack) return;
   if (activeCurve) view.removeCurve(activeCurve);
-  activeCurve = round.attack ? view.drawCurve([round.attack.path], round.attack.equation.color) : null;
+  activeCurve = round.attack ? round.attack.dots
+    ? view.drawAttackPreview({ ...round.attack, travelSections: round.attack.paths })
+    : view.drawCurve(round.attack.paths, round.attack.equation.color) : null;
   drawnAttack = round.attack;
 }
 

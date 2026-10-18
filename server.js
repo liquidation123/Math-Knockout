@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { createDuel, launchDuel, lockEquation, updateDuel, inkFromMask, setShapePhysics } from "./src/duel.js";
 import { takeFixedSteps } from "./src/physics.js";
+import { posthogServerLogger } from "./src/posthog-server-logs.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 let port = Number(process.env.PORT || 5173);
@@ -22,6 +23,14 @@ const types = {
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://localhost");
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
+  if (pathname === "/posthog-config.json") {
+    response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    response.end(JSON.stringify({
+      projectToken: process.env.POSTHOG_PROJECT_TOKEN,
+      host: process.env.POSTHOG_HOST,
+    }));
+    return;
+  }
   const filename = resolve(root, "." + decodeURIComponent(pathname));
 
   if (!filename.startsWith(root) || filename.includes(sep + ".git" + sep)) {
@@ -91,6 +100,11 @@ sockets.on("connection", (socket, request) => {
       if (room.duel.locked.every(Boolean)) {
         room.duel.phase = "countdown";
         room.startAt = Date.now() + 3000;
+        posthogServerLogger.emit({
+          severityText: "INFO",
+          body: "bump duel countdown started",
+          attributes: { event: "bump_duel_countdown_started", player_count: 2 },
+        });
         room.countdownTimer = setTimeout(() => {
           if (room.duel.phase === "countdown") { launchDuel(room.duel); publish(room); }
         }, 3000);
@@ -113,7 +127,15 @@ sockets.on("connection", (socket, request) => {
   });
   socket.on("close", () => {
     room.clients[side] = null;
-    if (room.clients.every((client) => !client)) { clearTimeout(room.countdownTimer); rooms.delete(id); }
+    if (room.clients.every((client) => !client)) {
+      clearTimeout(room.countdownTimer);
+      rooms.delete(id);
+      posthogServerLogger.emit({
+        severityText: "INFO",
+        body: "bump duel room released",
+        attributes: { event: "bump_duel_room_released" },
+      });
+    }
     else {
       room.masks[side] = null;
       room.clients.forEach((client) => send(client, { type: "shape", side, mask: null }));
@@ -150,5 +172,10 @@ sockets.on("error", (error) => {
 });
 server.on("listening", () => {
   console.log("Out-Mathed: http://" + host + ":" + server.address().port);
+  posthogServerLogger.emit({
+    severityText: "INFO",
+    body: "websocket server listening",
+    attributes: { event: "websocket_server_listening" },
+  });
 });
 server.listen(port, host);

@@ -39,7 +39,8 @@ export function selectCharacter(round, index) {
 
 function applyRecoil(attacker, attack) {
   const origin = attack.origin;
-  const next = attack.path.find((point) => point.x !== origin.x || point.y !== origin.y);
+  const points = attack.dots ? attack.paths.map((path) => path[0]) : attack.path;
+  const next = points.find((point) => point.x !== origin.x || point.y !== origin.y);
   // A one-point curve has no travel direction; use the team's firing direction.
   const dx = next ? next.x - origin.x : (attacker.team === 0 ? 1 : -1);
   const dy = next ? next.y - origin.y : 0;
@@ -85,6 +86,8 @@ function checkEliminations(round) {
     round.players.some((player) => player.team === team && !player.eliminated),
   );
   if (survivingTeams.every(Boolean)) return;
+  // Let every branch finish and its impact pause complete before announcing victory.
+  if (round.attack && (!round.attack.stopped || round.attack.age - round.attack.stoppedAt < ATTACK_DURATION)) return;
   round.result = {
     winner: survivingTeams.every((alive) => !alive) ? "Draw" : TEAM_NAMES[survivingTeams[0] ? 0 : 1],
     reason: "All opposing characters eliminated",

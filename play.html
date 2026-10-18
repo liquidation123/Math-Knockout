@@ -7,6 +7,7 @@
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/game.css">
     <link rel="stylesheet" href="/opponent.css">
+    <script type="module" src="/src/posthog-init.js"></script>
     <script type="importmap">
       {
         "imports": {
@@ -29,7 +30,12 @@
           <button id="restart" type="button">New round</button>
         </div>
         <p class="character-note" id="character-note">Playing with the starter character · <a href="/create.html">Draw your own</a></p>
-        <div class="opponent-row"><label for="opponent">Opponent</label><select id="opponent"><option value="human">Human opponent</option><option value="easy">Easy AI</option><option value="medium">Medium AI</option><option value="hard">Hard AI</option></select><span id="opponent-help"></span></div>
+        <div class="opponent-row">
+          <label for="opponent">Opponent</label><select id="opponent"><option value="human">Human opponent</option><option value="ai">AI opponent</option></select>
+          <label for="ai-type">AI Type</label><select id="ai-type"><option value="normal">Normal AI</option><option value="parametric">Parametric AI</option><option value="polar">Polar AI</option><option value="absolute">Absolute AI</option><option value="trig">Trig AI</option><option value="rational">Rational AI</option><option value="dot">Dot AI</option></select>
+          <label for="difficulty">Difficulty</label><select id="difficulty"><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
+          <span id="opponent-help"></span><span id="ai-type-help"></span>
+        </div>
         <p id="ai-thinking" role="status" hidden>AI is choosing…</p>
         <aside id="ai-dialogue" aria-label="Red character dialogue" hidden><strong id="ai-speaker"></strong><span id="ai-speech"></span></aside>
         <section class="teams" aria-label="Team health">
@@ -55,6 +61,7 @@
             <option value="parametric">Parametric: x(t), y(t)</option>
             <option value="polar">Polar: r = f(θ)</option>
             <option value="implicit">Implicit: F(x,y) = 0</option>
+            <option value="dots">Discrete dots: y = f(x)</option>
           </select>
           <button id="fire" type="button">Fire</button>
         </div>
@@ -74,6 +81,13 @@
             <label for="parameter-start">t start <input id="parameter-start" class="math-input" value="0" maxlength="200"></label>
             <label for="parameter-end">t end <input id="parameter-end" class="math-input" value="2π" maxlength="200"></label>
           </div>
+        </div>
+        <div data-equation-type="dots" hidden>
+          <div class="parameter-fields">
+          <label class="equation-row" for="dots-expression">y = <input id="dots-expression" class="math-input" value="0" maxlength="200" spellcheck="false"></label>
+          <label class="equation-row" for="dots-extra-x">Extra x (optional) <input id="dots-extra-x" class="math-input" value="" maxlength="200" spellcheck="false" placeholder="Enemy's relative x"></label>
+          </div>
+          <p class="examples">Same as Dot AI: x = 0, ±2, …, ±32 in the firing direction, plus optional extra x. No gap damage.</p>
         </div>
         <div data-equation-type="polar" hidden>
           <label class="equation-row" for="polar-radius">r(θ) = <input id="polar-radius" class="math-input" value="3" maxlength="200" spellcheck="false"></label>
@@ -95,7 +109,7 @@
             <label id="cardinal-label" for="launch-cardinal">Start <select id="launch-cardinal"><option value="right">Rightmost</option><option value="top">Topmost</option><option value="left">Leftmost</option><option value="bottom">Bottommost</option><option value="custom">Picked point</option></select></label>
           </div>
           <label class="launch-row" for="launch-point">Launch point <input id="launch-point" type="range" min="0" max="1" value="0" step="1"></label>
-          <p class="examples">Gray = available branches. White = firing path. Click a curve or use the slider to choose its launch point; it then shifts onto your character.</p>
+          <p class="examples">Gray = available branches. Yellow = travel. Click a curve or use the slider to choose its launch point; the entire graph shifts onto your character.</p>
         </div>
         <div id="symbols" class="symbol-row" aria-label="Insert mathematical symbols">
           <button type="button" data-symbol="θ" aria-label="Insert theta">θ</button>
@@ -116,7 +130,10 @@
         <details class="syntax-help"><summary>Syntax &amp; numerical limits (radians)</summary>
           <p>Use sin, cos, tan, asin, acos, atan, sqrt, abs, exp, ln (natural log), log (base 10), e, pi/π, and theta/θ. Examples: 2sin(t), 2π, 3cos(θ). Use * between named variables. No inequalities, derivatives, complex values, or arbitrary code.</p>
           <p>Explicit: x in [−32,32]. Parameter paths: 1,280 steps, finite bounds within ±1000, span ≤128π; start must be defined. Closed paths stop after one loop. Circle buttons set end = start ±2π (standard cos/sin circles); the start field sets the starting angle. Other curves follow start → end.</p>
-          <p>Implicit: numerical contours on a 0.25-unit grid in [−16,16]², at most 12,000 segments / 128 branches. Small loops, isolated points, repeated-factor zeros and high-frequency features may be missed. Junctions end branches. Discontinuity checks are numerical, not a proof of continuity; paths stop at detected breaks or the arena edge.</p>
+          <p>Implicit: numerical contours on a 0.25-unit grid in [−16,16]², at most 12,000 segments / 128 branches. Small loops, isolated points, repeated-factor zeros and high-frequency features may be missed. Discontinuity checks are numerical, not a proof of continuity.</p>
+          <p>Explicit rational branches launch together (cyan starts). Other disconnected paths teleport between purple arrivals, with no gap damage. Implicit branches visit the selected branch, then branch-index order. Walls and map exits stop bullets. Damage per enemy and recoil happen once per attack.</p>
+          <p>Discrete dots use the same point domain as Dot AI. Undefined points are skipped. Extra local x must be in the firing direction and within ±32. A dot inside a wall stops the shot; walls or enemies only in a gap are untouched. Inter-dot timing uses the same projectile speed.</p>
+          <p>If f(0) is undefined, automatic anchoring prefers a finite point at least one unit in the firing direction instead of launching beside the asymptote. A near-zero fallback keeps narrow real domains usable. Your typed expression is never replaced.</p>
         </details>
         <label class="pov-toggle"><input id="projectile-pov" type="checkbox" checked> Projectile camera</label>
         <p id="status" role="status"></p>
