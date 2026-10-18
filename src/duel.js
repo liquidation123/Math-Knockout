@@ -15,13 +15,19 @@ export function createDuel() {
   return {
     players: [createPlayer("Blue", -9.5, 0, 0.5, 0), createPlayer("Red", 9.5, 0, 0.5, 1)],
     paths: [null, null], locked: [false, false], phase: "planning", elapsed: 0, winner: null,
+    contacts: 0,
   };
+}
+
+export function bumpDirection(players, side) {
+  // Both players can turn toward their rival after crossing, not just toward their old spawn.
+  return Math.sign(players[1 - side].position.x - players[side].position.x) || (side === 0 ? 1 : -1);
 }
 
 export function lockEquation(duel, side, expression) {
   if (duel.phase !== "planning" || duel.locked[side]) return "Already locked.";
   const player = duel.players[side];
-  const preview = buildPreview(expression, player.position, side === 0 ? 1 : -1);
+  const preview = buildPreview(expression, player.position, bumpDirection(duel.players, side));
   if (preview.error) return preview.error;
   if (preview.path.length < 2) return "Choose a path with room to move.";
   duel.paths[side] = { points: preview.path, index: 0, speed: LAUNCH_SPEED, expression };
@@ -62,15 +68,8 @@ function followPath(player, path, dt) {
     const distance = Math.hypot(dx, dy);
     const step = Math.min(distance, remaining);
     if (distance > 0) {
-      const before = { ...player.position };
       const moveX = dx * step / distance, moveY = dy * step / distance;
-      movePlayerXY(player, moveX, moveY);
-      if (Math.abs(player.position.x - before.x - moveX) > 1e-8 ||
-        Math.abs(player.position.y - before.y - moveY) > 1e-8) {
-        path.done = true;
-        player.velocity.x = player.velocity.y = 0;
-        return; // A visible stone wall stops a bump launch; it never deals damage.
-      }
+      movePlayerXY(player, moveX, moveY, []);
     }
     remaining -= step;
     if (step >= distance - 1e-8) path.index += 1;
@@ -96,6 +95,7 @@ function collide(duel) {
   const nx = distance ? dx / distance : 1, ny = distance ? dy / distance : 0;
   const closing = (a.velocity.x - b.velocity.x) * nx + (a.velocity.y - b.velocity.y) * ny;
   if (closing <= 0) return;
+  duel.contacts += 1;
   duel.paths.forEach((path) => { path.done = true; });
   // Equal-and-opposite impulses preserve momentum; boosted force makes edge knockouts possible.
   const impulse = 4.7 * closing / (1 / a.mass + 1 / b.mass);
@@ -112,7 +112,7 @@ export function updateDuel(duel, dt) {
   duel.players.forEach((player, side) => {
     const path = duel.paths[side];
     if (!path.done) followPath(player, path, dt);
-    if (path.done) updatePlayer(player, dt);
+    if (path.done) updatePlayer(player, dt, []);
     if (player.position.z < ARENA.fallHeight) player.eliminated = true;
   });
   collide(duel);
