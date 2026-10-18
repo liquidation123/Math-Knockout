@@ -39,4 +39,22 @@ npm run build
 
 `dist/` contains the static deployment. The tests cover drawing and ink, equation parsing, fixed-step physics, collision masks, both game modes, bot choices, room connections, and the static solo fallback.
 
-PostHog benchmark events are **not** wired in yet; that integration is being handled separately.
+## PostHog
+
+The shared browser setup records page activity and the custom events
+`character_created`, `projectile_attack_fired`, `projectile_round_completed`,
+`bump_path_locked`, `bump_duel_completed`, and `bump_invite_copied`.
+The multiplayer server also exports startup, countdown, and room-release logs.
+These events do not include drawings, room/reconnect tokens, or typed equations.
+
+Set `POSTHOG_PROJECT_TOKEN` to the public project token and `POSTHOG_HOST` to
+the ingestion host from your PostHog project (for example, `https://us.i.posthog.com`).
+For local use, keep these in `.env`, which is ignored by Git. With Node 22.9 or
+newer, `npm start` and `npm run build` load that file automatically.
+Without configuration, analytics stays disabled and the game still works.
+
+For Vercel, set both variables in Production and rebuild/redeploy; the static
+build exposes only these two public values in `posthog-config.json`.
+For Render, set both variables on the Node service and deploy the latest commit.
+Never use a personal API key in browser configuration. The browser SDK can be
+blocked by an ad blocker; verify live ingestion in PostHog after deployment.

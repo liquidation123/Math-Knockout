@@ -21,7 +21,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   };
   let resolveMountain, rejectMountain, socket;
   const ready = new Promise((resolve, reject) => { resolveMountain = resolve; rejectMountain = reject; });
-  const errors = [], windowEvents = {}, frames = [];
+  const errors = [], windowEvents = {}, frames = [], analytics = [];
   let now = 0;
   class FakeDate extends Date { static now() { return now; } }
   const sessionStorage = { getItem: () => null, setItem() {} };
@@ -42,7 +42,10 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   }
   runInNewContext(source, {
     URL, location: new URL(pageUrl),
-    document: { querySelector: element, querySelectorAll: () => [] }, window: { addEventListener(name, handler) { windowEvents[name] = handler; } },
+    document: { querySelector: element, querySelectorAll: () => [] }, window: {
+      addEventListener(name, handler) { windowEvents[name] = handler; },
+      posthog: { capture: (name, properties) => analytics.push({ name, properties }) },
+    },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
     buildPreview, safeTravelPath, insideDuel, interceptSlope, sessionStorage, BUMP_SERVER_URL: serverUrl,
     chooseBotEquation, createDuel, launchDuel, lockEquation, setDuelBody, updateDuel, takeFixedSteps,
@@ -51,13 +54,30 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   });
   const message = (data) => socket.emit("message", { data: JSON.stringify(data) });
   const state = (side = 0) => message({ type: "state", side, ...createDuel() });
-  return { element, resolveMountain, rejectMountain, socket, message, state, errors, windowEvents,
+  return { element, resolveMountain, rejectMountain, socket, message, state, errors, windowEvents, analytics,
     setNow: (time) => { now = time; }, frame: () => {
       const index = frames.findIndex((fn) => fn.name === "frame");
       if (index >= 0) frames.splice(index, 1)[0]();
     } };
 }
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test("Bump analytics records lock and completion once even when repeated states share mutable arrays", () => {
+  const ui = setup();
+  const duel = createDuel();
+  const publish = () => ui.message({ type: "state", side: 0, bot: true, ...duel });
+  publish();
+  duel.locked[0] = true;
+  publish();
+  publish();
+  duel.phase = "finished";
+  duel.winner = "Blue";
+  publish();
+  publish();
+  assert.deepEqual(ui.analytics.map((event) => event.name), ["bump_path_locked", "bump_duel_completed"]);
+  assert.equal(ui.analytics[0].properties.opponent_type, "ai");
+  assert.equal(ui.analytics[1].properties.outcome, "win");
+});
 
 test("Bump loading waits for both the mountain and a server-assigned side, in either order", async () => {
   for (const mountainFirst of [true, false]) {
