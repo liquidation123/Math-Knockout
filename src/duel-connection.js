@@ -16,6 +16,11 @@ export function duelSocketUrl(pageUrl, serverUrl = BUMP_SERVER_URL) {
     server.searchParams.delete("room");
     server.searchParams.set("quick", "1");
   }
-  else server.searchParams.set("room", page.searchParams.get("room") || "");
+  else {
+    server.searchParams.delete("quick");
+    server.searchParams.set("room", page.searchParams.get("room") || "");
+  }
+  if (page.searchParams.get("players") === "4" && page.searchParams.get("quick") !== "1") server.searchParams.set("players", "4");
+  else server.searchParams.delete("players");
   return server.href;
 }

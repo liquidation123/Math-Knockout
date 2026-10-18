@@ -6,6 +6,8 @@ import { bodyContact, bodyFromMask, starterMask } from "./body.js";
 const LAUNCH_SPEED = 7.5;
 const LAUNCH_FRICTION = 2.25; // Distance = speed²/(2·friction) = 12.5 units.
 export const DUEL_RADIUS = 8.25;
+export const DUEL_NAMES = ["Blue", "Red", "Green", "Gold"];
+export const DUEL_COLORS = [0x2889ff, 0xff6b86, 0x36c88b, 0xffc444];
 const launchSpeed = (mass, force) => LAUNCH_SPEED * force / Math.sqrt(mass);
 export const travelDistance = (mass = 1, force = 1) => LAUNCH_SPEED ** 2 * force ** 2 / (2 * LAUNCH_FRICTION * mass);
 export const insideDuel = (x, y, radius) => Math.hypot(x, y) < radius;
@@ -46,25 +48,45 @@ export function chooseBotEquation(duel, random = Math.random) {
   return random() < .3 ? `${slope}*x+0.15*sin(1.5*x)` : `${slope}*x`;
 }
 
-export function createDuel() {
-  const bodies = [bodyFromMask(starterMask(0)), bodyFromMask(starterMask(1))];
-  const players = [createPlayer("Blue", -5.2, 0, 0.5, 0), createPlayer("Red", 5.2, 0, 0.5, 1)];
+export function duelTarget(players, side) {
+  const own = players[side];
+  let target = null, closest = Infinity;
+  players.forEach((player, index) => {
+    if (index === side || player.eliminated) return;
+    const distance = Math.hypot(player.position.x - own.position.x, player.position.y - own.position.y);
+    if (distance < closest) { closest = distance; target = index; }
+  });
+  return target;
+}
+
+export const duelReady = (duel) => duel.players.filter((p) => !p.eliminated).length >= 2 &&
+  duel.players.every((player, side) => player.eliminated || duel.locked[side]);
+
+export function createDuel(count = 2) {
+  const spawns = [[-5.2, 0], [5.2, 0], [0, 5.2], [0, -5.2]];
+  const bodies = Array.from({ length: count }, (_, side) => bodyFromMask(starterMask(side % 2)));
+  const players = bodies.map((_, side) => createPlayer(DUEL_NAMES[side], ...spawns[side], .5, side));
   players.forEach((player, side) => {
     Object.assign(player, { mass: bodies[side].mass, inertia: bodies[side].inertia,
       radius: bodies[side].radius, angle: 0, angularVelocity: 0 });
   });
   return {
     players, bodies,
-    paths: [null, null], locked: [false, false], phase: "planning", elapsed: 0, winner: null, resignedBy: null,
+    paths: Array(count).fill(null), locked: Array(count).fill(false), phase: "planning", elapsed: 0, winner: null, resignedBy: null,
     round: 1, radius: DUEL_RADIUS, replay: [], replayTime: 0,
   };
 }
 
 export function resignDuel(duel, side) {
-  if (duel.phase === "finished" || ![0, 1].includes(side)) return false;
-  duel.phase = "finished";
-  duel.winner = duel.players[1 - side].name;
-  duel.resignedBy = side;
+  if (duel.phase === "finished" || duel.phase === "lobby" || !duel.players[side] || duel.players[side].eliminated) return false;
+  duel.players[side].eliminated = true;
+  duel.locked[side] = true;
+  const alive = duel.players.filter((player) => !player.eliminated);
+  if (alive.length < 2) {
+    duel.phase = "finished";
+    duel.winner = alive[0]?.name || "Draw";
+    duel.resignedBy = side;
+  }
   return true;
 }
 
@@ -75,10 +97,12 @@ export function setDuelBody(duel, side, mask) {
 }
 
 export function lockEquation(duel, side, expression, force = 1) {
-  if (duel.phase !== "planning" || duel.locked[side]) return "Already locked.";
+  if (duel.phase !== "planning" || !duel.players[side] || duel.players[side].eliminated || duel.locked[side]) return "Already locked.";
   if (!Number.isFinite(force) || force < .5 || force > 3) return "Choose Force between 0.5 and 3.";
   const player = duel.players[side];
-  const direction = forwardDirection(player.position, duel.players[1 - side].position, side === 0 ? 1 : -1);
+  const target = duelTarget(duel.players, side);
+  if (target === null) return "Wait for an opponent.";
+  const direction = forwardDirection(player.position, duel.players[target].position, side % 2 === 0 ? 1 : -1);
   const preview = buildPreview(expression, player.position, direction);
   if (preview.error) return preview.error;
   if (preview.path.length < 2) return "Choose a path with room to move.";
@@ -91,7 +115,7 @@ export function lockEquation(duel, side, expression, force = 1) {
 }
 
 export function launchDuel(duel) {
-  if (!duel.locked.every(Boolean)) return false;
+  if (!duelReady(duel)) return false;
   duel.phase = "running";
   duel.elapsed = 0;
   duel.settledFor = 0;
@@ -143,14 +167,12 @@ function followPath(player, path, dt, radius, obstacles) {
     const distance = Math.hypot(dx, dy);
     const step = Math.min(distance, remaining);
     if (distance > 0) {
-      const before = { ...player.position };
       const moveX = dx * step / distance, moveY = dy * step / distance;
-      movePlayerXY(player, moveX, moveY, obstacles);
-      if (Math.abs(player.position.x - before.x - moveX) > 1e-8 ||
-        Math.abs(player.position.y - before.y - moveY) > 1e-8) {
+      player.velocity.x = dx / distance * path.speed;
+      player.velocity.y = dy / distance * path.speed;
+      if (movePlayerXY(player, moveX, moveY, obstacles)) {
         path.done = true;
-        player.velocity.x = player.velocity.y = 0;
-        return; // A visible stone wall stops a bump launch; it never deals damage.
+        return; // Leave the equation path and let normal physics carry the wall bounce.
       }
     }
     remaining -= step;
@@ -168,18 +190,18 @@ function followPath(player, path, dt, radius, obstacles) {
   }
 }
 
-function collide(duel) {
-  const [a, b] = duel.players;
+function collide(duel, first, second) {
+  const a = duel.players[first], b = duel.players[second];
   if (a.eliminated || b.eliminated || Math.abs(a.position.z - b.position.z) > PLAYER_SIZE) return;
   const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y;
   const distance = Math.hypot(dx, dy);
-  const contact = bodyContact(duel.bodies[0], a.position, a.angle,
-    duel.bodies[1], b.position, b.angle);
+  const contact = bodyContact(duel.bodies[first], a.position, a.angle,
+    duel.bodies[second], b.position, b.angle);
   if (!contact) return;
   const nx = distance ? dx / distance : 1, ny = distance ? dy / distance : 0;
   const closing = (a.velocity.x - b.velocity.x) * nx + (a.velocity.y - b.velocity.y) * ny;
   if (closing <= 0) return;
-  duel.paths.forEach((path) => { path.done = true; });
+  duel.paths[first].done = duel.paths[second].done = true;
   // Equal-and-opposite impulses use both masks' mass and rotational inertia.
   const ax = contact.x - a.position.x, ay = contact.y - a.position.y;
   const bx = contact.x - b.position.x, by = contact.y - b.position.y;
@@ -201,14 +223,17 @@ export function updateDuel(duel, dt) {
   duel.elapsed += dt;
   const obstacles = duelObstacles(duel.round, duel.radius);
   duel.players.forEach((player, side) => {
+    if (player.eliminated) return;
     const path = duel.paths[side];
     if (!path.done) followPath(player, path, dt, duel.radius, obstacles);
-    if (path.done) updatePlayer(player, dt, obstacles, (x, y) => insideDuel(x, y, duel.radius));
+    else updatePlayer(player, dt, obstacles, (x, y) => insideDuel(x, y, duel.radius));
     if (player.position.z < ARENA.fallHeight) player.eliminated = true;
     player.angle += player.angularVelocity * dt;
     player.angularVelocity *= Math.max(0, 1 - 1.5 * dt);
   });
-  collide(duel);
+  for (let first = 0; first < duel.players.length; first++) {
+    for (let second = first + 1; second < duel.players.length; second++) collide(duel, first, second);
+  }
   duel.replayTime += dt;
   if (duel.replayTime >= .1) {
     duel.replayTime = 0;
@@ -225,30 +250,30 @@ export function updateDuel(duel, dt) {
       duel.phase = "finished";
       duel.winner = alive.length ? alive[0].name : "Draw";
     }
-  } else if (!duel.eroding) {
-    const still = duel.paths.every((path) => path.done || path.speed < .12) &&
+  } else {
+    const still = duel.players.every((player, side) => player.eliminated || duel.paths[side].done || duel.paths[side].speed < .12) &&
       playersAreStill(duel.players, (x, y) => insideDuel(x, y, duel.radius));
     duel.settledFor = still ? (duel.settledFor || 0) + dt : 0;
     if (duel.settledFor < .15) return;
-    duel.round += 1;
-    const nextRadius = Math.max(2.8, DUEL_RADIUS - (duel.round - 1) * .7);
-    const [blueDistance, redDistance] = duel.players.map((player) =>
-      Math.hypot(player.position.x, player.position.y));
-    // If both would fall, shrink just until the farther one leaves first.
-    duel.radius = Math.min(duel.radius, blueDistance >= nextRadius && redDistance >= nextRadius &&
-      Math.abs(blueDistance - redDistance) > .05
-      ? (blueDistance + redDistance) / 2 : nextRadius);
+    if (!duel.eroding) {
+      duel.round += 1;
+      const nextRadius = Math.max(2.8, DUEL_RADIUS - (duel.round - 1) * .7);
+      const distances = alive.map((player) => Math.hypot(player.position.x, player.position.y)).sort((a, b) => a - b);
+      // If everyone would fall, keep the closest survivor supported until the others fall.
+      duel.radius = Math.min(duel.radius, distances[0] >= nextRadius && distances[1] - distances[0] > .05
+        ? (distances[0] + distances[1]) / 2 : nextRadius);
+    }
     duel.players.forEach((player) => {
       player.velocity.x = player.velocity.y = 0;
     });
     // Keep physics running while unsupported characters fall, rather than deleting them.
-    duel.eroding = duel.players.some((player) => !insideDuel(player.position.x, player.position.y, duel.radius));
+    duel.eroding = alive.some((player) => !insideDuel(player.position.x, player.position.y, duel.radius));
     if (duel.eroding) {
-      duel.paths.forEach((path) => { path.done = true; });
+      duel.paths.forEach((path) => { if (path) path.done = true; });
     } else {
       duel.phase = "planning";
-      duel.paths = [null, null];
-      duel.locked = [false, false];
+      duel.paths = duel.players.map(() => null);
+      duel.locked = duel.players.map((player) => player.eliminated);
     }
   }
 }

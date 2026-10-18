@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { chooseBotEquation, createDuel, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel } from "./src/duel.js";
+import { chooseBotEquation, createDuel, duelReady, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel } from "./src/duel.js";
 import { takeFixedSteps } from "./src/physics.js";
 import { posthogServerLogger } from "./src/posthog-server-logs.js";
 
@@ -84,17 +84,18 @@ function publish(room) {
     locked: room.duel.locked, winner: room.duel.winner, resignedBy: room.duel.resignedBy, startAt: room.startAt,
     room: room.id, bot: room.bot, botAt: room.botAt, round: room.duel.round, radius: room.duel.radius,
     token: room.tokens[side],
+    capacity: room.capacity, connected: room.clients.map((client) => !!client), host: room.clients.findIndex((client) => !!client),
   }));
 }
 
 function countdown(room) {
-  if (!room.duel.locked.every(Boolean)) return;
+  if (room.duel.phase !== "planning" || !duelReady(room.duel)) return;
   room.duel.phase = "countdown";
   room.startAt = Date.now() + 3000;
   posthogServerLogger.emit({
     severityText: "INFO",
     body: "bump duel countdown started",
-    attributes: { event: "bump_duel_countdown_started", player_count: 2 },
+    attributes: { event: "bump_duel_countdown_started", player_count: room.duel.players.filter((p) => !p.eliminated).length },
   });
   room.countdownTimer = setTimeout(() => {
     if (room.duel.phase === "countdown") { launchDuel(room.duel); publish(room); }
@@ -104,7 +105,11 @@ function countdown(room) {
 function resetRoom(room) {
   clearTimeout(room.countdownTimer);
   room.countdownTimer = null;
-  room.duel = createDuel();
+  room.duel = createDuel(room.capacity);
+  if (room.capacity > 2) {
+    room.duel.phase = "lobby";
+    room.duel.players.forEach((player, side) => { player.eliminated = !room.clients[side]; });
+  }
   room.startAt = 0;
   room.masks.forEach((mask, side) => {
     if (mask) setDuelBody(room.duel, side, mask);
@@ -118,16 +123,24 @@ sockets.on("connection", (socket, request) => {
   const waiting = quick && [...rooms.values()].find((room) => room.quick && !room.bot && room.clients[0] && !room.clients[1]);
   const id = quick ? waiting?.id || randomUUID().slice(0, 8) : params.get("room");
   if (!/^[a-zA-Z0-9-]{4,32}$/.test(id || "")) return socket.close(1008, "Invalid room link. Return to Change mode and start a new Bump Duel.");
-  const room = rooms.get(id) || { id, quick, bot: false, clients: [null, null], tokens: [null, null],
-    graceTimers: [null, null], masks: [null, null], duel: createDuel(), startAt: 0 };
+  const capacity = !quick && params.get("players") === "4" ? 4 : 2;
+  const room = rooms.get(id) || { id, quick, capacity, bot: false, clients: Array(capacity).fill(null), tokens: Array(capacity).fill(null),
+    graceTimers: Array(capacity).fill(null), masks: Array(capacity).fill(null), duel: createDuel(capacity), startAt: 0 };
+  if (!rooms.has(id) && capacity > 2) {
+    room.duel.phase = "lobby";
+    room.duel.players.forEach((player) => { player.eliminated = true; });
+  }
   const side = resume ? room.tokens.indexOf(resume)
     : room.clients.findIndex((client, index) => !client && !room.tokens[index] && !(room.bot && index === 1));
   if (side < 0) return socket.close(1008, resume ? "Reconnect expired. Start a new duel." : "This room is full. Start a new duel.");
+  if (!resume && room.capacity > 2 && room.duel.phase !== "lobby")
+    return socket.close(1008, "This match has started. Ask the host to restart before joining.");
   if (room.clients[side]) room.clients[side].close();
   clearTimeout(room.graceTimers[side]);
   room.tokens[side] ||= randomUUID();
   rooms.set(id, room);
   room.clients[side] = socket;
+  if (room.duel.phase === "lobby") room.duel.players[side].eliminated = false;
   if (side === 0 && quick && !room.bot && !room.botTimer) {
     room.botAt = Date.now() + 10000;
     room.botTimer = setTimeout(() => {
@@ -147,14 +160,21 @@ sockets.on("connection", (socket, request) => {
     let message;
     try { message = JSON.parse(bytes); } catch { return; }
     if (!message || typeof message !== "object") return;
-    if (message.type === "lock") {
+    if (message.type === "start" && room.capacity > 2) {
+      if (side !== room.clients.findIndex((client) => !!client) || room.duel.phase !== "lobby") return;
+      if (room.clients.filter(Boolean).length < 2) return send(socket, { type: "error", error: "Invite at least one other player before starting." });
+      room.duel.players.forEach((player, index) => { player.eliminated = !room.clients[index]; });
+      room.duel.locked = room.duel.players.map((player) => player.eliminated);
+      room.duel.phase = "planning";
+      publish(room);
+    } else if (message.type === "lock") {
       const error = lockEquation(room.duel, side, String(message.expression || ""), message.force ?? 1);
       if (error) return send(socket, { type: "error", error });
       // The bot picks from public positions, never the hidden human equation.
       if (room.bot) lockEquation(room.duel, 1, chooseBotEquation(room.duel));
       countdown(room);
       publish(room);
-    } else if (message.type === "shape" && room.duel.phase === "planning" && !room.duel.locked[side]) {
+    } else if (message.type === "shape" && ["lobby", "planning"].includes(room.duel.phase) && !room.duel.locked[side]) {
       const mask = message.mask;
       if (typeof mask !== "string" || !/^[01]{10240}$/.test(mask)) return;
       const ink = inkFromMask(mask);
@@ -166,13 +186,16 @@ sockets.on("connection", (socket, request) => {
       publish(room);
     } else if (message.type === "resign") {
       if (resignDuel(room.duel, side)) {
-        clearTimeout(room.countdownTimer);
-        clearTimeout(room.botTimer);
-        room.botTimer = null;
-        room.startAt = 0;
+        if (room.duel.phase === "finished") {
+          clearTimeout(room.countdownTimer);
+          clearTimeout(room.botTimer);
+          room.botTimer = null;
+          room.startAt = 0;
+        } else countdown(room);
         publish(room);
       }
     } else if (message.type === "reset") {
+      if (room.capacity > 2 && side !== room.clients.findIndex((client) => !!client)) return;
       resetRoom(room);
       publish(room);
     }
@@ -193,7 +216,12 @@ sockets.on("connection", (socket, request) => {
         });
       } else {
         room.clients.forEach((client) => send(client, { type: "shape", side, mask: null }));
-        resetRoom(room); publish(room);
+        if (room.capacity > 2) {
+          if (room.duel.phase === "lobby") room.duel.players[side].eliminated = true;
+          else resignDuel(room.duel, side);
+          countdown(room);
+        } else resetRoom(room);
+        publish(room);
       }
     }, 15000);
   });

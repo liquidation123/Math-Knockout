@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
 import { forwardDirection } from "../src/aiming.js";
-import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, resignDuel, safeTravelPath, setDuelBody, updateDuel } from "../src/duel.js";
+import { DUEL_NAMES, chooseBotEquation, createDuel, duelTarget, insideDuel, interceptSlope, launchDuel, lockEquation, resignDuel, safeTravelPath, setDuelBody, updateDuel } from "../src/duel.js";
 import { takeFixedSteps } from "../src/physics.js";
 import { duelSocketUrl } from "../src/duel-connection.js";
 
@@ -22,7 +22,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   };
   let resolveMountain, rejectMountain, socket;
   const ready = new Promise((resolve, reject) => { resolveMountain = resolve; rejectMountain = reject; });
-  const errors = [], windowEvents = {}, frames = [], analytics = [];
+  const errors = [], windowEvents = {}, frames = [], analytics = [], copied = [];
   let now = 0;
   class FakeDate extends Date { static now() { return now; } }
   const sessionStorage = { getItem: () => null, setItem() {} };
@@ -42,7 +42,8 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     close() { this.readyState = 3; this.emit("close"); }
   }
   runInNewContext(source, {
-    URL, location: new URL(pageUrl),
+    URL, location: new URL(pageUrl), navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } },
+    setTimeout: () => 0,
     document: { querySelector: element, querySelectorAll: () => [] }, window: {
       addEventListener(name, handler) { windowEvents[name] = handler; },
       confirm: () => true,
@@ -50,19 +51,60 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
     buildPreview, forwardDirection, safeTravelPath, insideDuel, interceptSlope, sessionStorage, BUMP_SERVER_URL: serverUrl,
-    chooseBotEquation, createDuel, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel, takeFixedSteps,
+    DUEL_NAMES, chooseBotEquation, createDuel, duelTarget, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel, takeFixedSteps,
     Date: FakeDate, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame(fn) { frames.push(fn); },
     console: { error: (...args) => errors.push(args) },
   });
   const message = (data) => socket.emit("message", { data: JSON.stringify(data) });
   const state = (side = 0) => message({ type: "state", side, ...createDuel() });
-  return { element, resolveMountain, rejectMountain, socket, message, state, errors, windowEvents, analytics,
+  return { element, resolveMountain, rejectMountain, socket, message, state, errors, windowEvents, analytics, copied,
     setNow: (time) => { now = time; }, frame: () => {
       const index = frames.findIndex((fn) => fn.name === "frame");
       if (index >= 0) frames.splice(index, 1)[0]();
     } };
 }
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test("group lobby supports Green and Gold, host start, spectator controls and the same invite URL", async () => {
+  const url = "http://localhost/bump.html?room=group-test&players=4";
+  const ui = setup({ pageUrl: url });
+  ui.resolveMountain(); await flush();
+  const duel = createDuel(4);
+  duel.phase = "lobby";
+  const publish = (side = 0) => ui.message({ type: "state", side, host: 0, connected: [true, true, true, true], ...duel });
+  publish();
+  assert.equal(ui.element("#start").hidden, false);
+  assert.equal(ui.element("#start").disabled, false);
+  assert.equal(ui.element("#lock").disabled, true);
+  assert.match(ui.element("#roster").textContent, /Green: joined.*Gold: joined/);
+  await ui.element("#invite").click();
+  assert.deepEqual(ui.copied, [url]);
+  ui.element("#start").click();
+  assert.deepEqual(ui.socket.sent.at(-1), { type: "start" });
+  publish(2);
+  assert.match(ui.element("#side").textContent, /Green/);
+  assert.equal(ui.element("#start").hidden, true);
+  duel.phase = "planning";
+  publish(3);
+  assert.match(ui.element("#side").textContent, /Gold/);
+  assert.equal(ui.element("#lock").disabled, false);
+  assert.equal(ui.element("#reset").disabled, true);
+  duel.players[3].eliminated = true; duel.locked[3] = true;
+  publish(3);
+  assert.equal(ui.element("#lock").disabled, true);
+  assert.equal(ui.element("#resign").disabled, true);
+  assert.match(ui.element("#side").textContent, /spectating/);
+  assert.equal(ui.errors.length, 0);
+});
+
+test("an old two-player backend cannot silently downgrade a four-player invite", () => {
+  const ui = setup({ pageUrl: "http://localhost/bump.html?room=old-group&players=4" });
+  ui.state();
+  assert.equal(ui.element("#retry").hidden, false);
+  assert.match(ui.element("#loading-message").textContent, /updated game server.*Restart npm start/);
+  assert.equal(ui.element("#start").disabled, true);
+  assert.equal(ui.element("#lock").disabled, true);
+});
 
 test("Bump resignation sends one action and displays the server's result", async () => {
   const ui = setup();

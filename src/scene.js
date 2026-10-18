@@ -8,7 +8,7 @@ import { effectKind, pathLookAhead } from "./cinematic.js";
 import { createViewGizmo } from "./view-gizmo.js";
 import { bodyFromMask, starterMask } from "./body.js";
 import { createBodyMesh } from "./body-mesh.js";
-import { DUEL_RADIUS, duelObstacles } from "./duel.js";
+import { DUEL_RADIUS, DUEL_COLORS, duelObstacles } from "./duel.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -286,7 +286,7 @@ export function createView(container, hud, controls, mode = "projectile") {
       else mesh.position.lerp(target, 0.35); // Smooth 20 Hz snapshots for display only.
       mesh.userData.ready = true;
       if (mode === "bump") mesh.rotation.z = player.angle || 0;
-      mesh.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
+      mesh.material.color.setHex(mode === "bump" ? DUEL_COLORS[player.team] : player.team === 0 ? 0x76b7ff : 0xff8c99);
       if (mesh.userData.drawing) {
         mesh.userData.drawing.scale.setScalar(index === selectedIndex ? 1.12 : 1);
         mesh.userData.tilt = -player.velocity.x * 0.08;
@@ -306,9 +306,9 @@ export function createView(container, hud, controls, mode = "projectile") {
       });
       mesh.userData.drawing = null;
     }
-    mask = mask?.includes("1") ? mask : starterMask(index >= (mode === "bump" ? 1 : 3) ? 1 : 0);
+    mask = mask?.includes("1") ? mask : starterMask(mode === "bump" ? index % 2 : index >= 3 ? 1 : 0);
     if (mode === "bump") {
-      const color = index === 0 ? 0x2889ff : 0xff6b86;
+      const color = DUEL_COLORS[index % DUEL_COLORS.length];
       const drawing = createBodyMesh(bodyFromMask(mask), color);
       mesh.add(drawing);
       mesh.userData.drawing = drawing;

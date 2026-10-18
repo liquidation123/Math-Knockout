@@ -2,6 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { duelSocketUrl } from "../src/duel-connection.js";
 
+test("four-player invite capacity reaches local and hosted backends without changing Quick Match", () => {
+  assert.equal(duelSocketUrl("http://localhost/bump.html?room=group-test&players=4"),
+    "ws://localhost/?room=group-test&players=4");
+  assert.equal(duelSocketUrl("https://game.example.com/bump.html?room=group-test&players=4", "https://duel.example.com/socket"),
+    "wss://duel.example.com/socket?room=group-test&players=4");
+  assert.equal(new URL(duelSocketUrl("http://localhost/bump.html?quick=1&players=4")).searchParams.has("players"), false);
+});
+
 test("local play keeps the current host and port with the same room", () => {
   assert.equal(duelSocketUrl("http://127.0.0.1:5173/bump.html?room=77164621"),
     "ws://127.0.0.1:5173/?room=77164621");

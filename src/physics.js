@@ -4,6 +4,7 @@ export const PLAYER_SIZE = 1;
 export const FIXED_STEP = 1 / 120;
 export const GRAVITY = 12;
 export const GROUND_FRICTION = 4;
+export const WALL_BOUNCE = .8; // Keep 80% of speed perpendicular to the wall.
 // Every visible box is also one collision rectangle; gaps have no hidden collider.
 export const OBSTACLES = [
   // Two central ruins become Bump Duel obstacles from round three.
@@ -63,8 +64,37 @@ export function updatePlayer(player, dt, obstacles = OBSTACLES, onPlatform = ins
 }
 
 export function movePlayerXY(player, dx, dy, obstacles = OBSTACLES) {
-  moveAxis(player, "x", dx, obstacles);
-  moveAxis(player, "y", dy, obstacles);
+  if (separateFromWalls(player, obstacles)) return true;
+  const hitX = moveAxis(player, "x", dx, obstacles);
+  const hitY = moveAxis(player, "y", dy, obstacles);
+  return hitX || hitY;
+}
+
+function separateFromWalls(player, obstacles) {
+  const half = player.radius || PLAYER_SIZE / 2;
+  const overlaps = (point, box) => Math.abs(point.x - box.x) < box.width / 2 + half - 1e-9 &&
+    Math.abs(point.y - box.y) < box.depth / 2 + half - 1e-9;
+  if (!obstacles.some((box) => overlaps(player.position, box))) return false;
+  const origin = player.position;
+  let nearest, nearestDistance = Infinity;
+  // Check nearby faces and corners, rejecting exits inside another part of an L-wall.
+  // This bounded search also handles a wall appearing underneath a character.
+  for (const box of obstacles) {
+    const left = box.x - box.width / 2 - half - .001, right = box.x + box.width / 2 + half + .001;
+    const bottom = box.y - box.depth / 2 - half - .001, top = box.y + box.depth / 2 + half + .001;
+    for (const x of [left, origin.x, right]) for (const y of [bottom, origin.y, top]) {
+      const point = { x, y }, distance = Math.hypot(x - origin.x, y - origin.y);
+      if (distance >= nearestDistance || obstacles.some((part) => overlaps(point, part))) continue;
+      nearest = point;
+      nearestDistance = distance;
+    }
+  }
+  for (const axis of ["x", "y"]) {
+    // Only reverse velocity pointing into the wall, never velocity already escaping.
+    if (player.velocity[axis] * (nearest[axis] - origin[axis]) < 0) player.velocity[axis] *= -WALL_BOUNCE;
+    player.position[axis] = nearest[axis];
+  }
+  return true;
 }
 
 function moveAxis(player, axis, amount, obstacles) {
@@ -84,7 +114,9 @@ function moveAxis(player, axis, amount, obstacles) {
     if (amount < 0 && start >= far && end < far) end = Math.max(end, far);
   }
   player.position[axis] = end;
-  if (end !== start + amount) player.velocity[axis] = 0;
+  const hit = end !== start + amount;
+  if (hit) player.velocity[axis] *= -WALL_BOUNCE;
+  return hit;
 }
 
 export function applyImpulse(player, impulse) {

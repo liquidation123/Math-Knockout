@@ -1,6 +1,6 @@
 import { buildPreview } from "./equations.js";
 import { forwardDirection } from "./aiming.js";
-import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, resignDuel, safeTravelPath, setDuelBody, updateDuel } from "./duel.js";
+import { DUEL_NAMES, chooseBotEquation, createDuel, duelTarget, insideDuel, interceptSlope, launchDuel, lockEquation, resignDuel, safeTravelPath, setDuelBody, updateDuel } from "./duel.js";
 import { takeFixedSteps } from "./physics.js";
 import { createView } from "./scene.js";
 import { readSavedMask } from "./saved-character.js";
@@ -21,6 +21,7 @@ let replayFrames = null, replayStarted = 0, effectsTime = Date.now();
 let pathWasLocked = false;
 const localPage = ["localhost", "127.0.0.1", "[::1]"].includes(room.hostname);
 const quick = room.searchParams.get("quick") === "1";
+$("#party-link").hidden = room.searchParams.get("players") === "4";
 const canFallback = !localPage && quick;
 const backendStart = Date.now();
 let solo = canFallback && !BUMP_SERVER_URL;
@@ -40,7 +41,7 @@ function showConnectionError(message, error) {
   $("#retry").hidden = false;
   $("#side").textContent = "Connection unavailable";
   $("#error").textContent = "Offline";
-  for (const id of ["#equation", "#lock", "#reset", "#resign", "#view", "#again", "#bump-force"]) $(id).disabled = true;
+  for (const id of ["#equation", "#lock", "#reset", "#resign", "#view", "#again", "#bump-force", "#start"]) $(id).disabled = true;
   document.querySelectorAll("[data-aim]").forEach((button) => { button.disabled = true; });
   console.error("Bump Duel:", message, error || "");
   socket?.close();
@@ -78,9 +79,11 @@ socket?.addEventListener("open", async () => {
 });
 
 function drawPreview() {
-  if (startupFailed || !state || state.side == null || state.phase !== "planning" || state.locked[state.side]) return;
+  if (startupFailed || !state || state.side == null || state.phase !== "planning" || state.locked[state.side] || state.players[state.side].eliminated) return;
   const player = state.players[state.side];
-  const direction = forwardDirection(player.position, state.players[1 - state.side].position, state.side === 0 ? 1 : -1);
+  const target = duelTarget(state.players, state.side);
+  if (target === null) return;
+  const direction = forwardDirection(player.position, state.players[target].position, state.side % 2 === 0 ? 1 : -1);
   const force = Number($("#bump-force").value);
   const key = $("#equation").value + player.position.x + "," + player.position.y + "," + state.radius + "," + player.mass + "," + direction + "," + force;
   if (key === lastKey) return;
@@ -105,9 +108,11 @@ function suggestPaths() {
   const flank = document.querySelector('[data-aim="flank"]');
   if (!direct?.dataset || !flank?.dataset) return;
   const own = state.players[state.side].position;
-  const rival = state.players[1 - state.side].position;
+  const target = duelTarget(state.players, state.side);
+  if (target === null) { direct.disabled = flank.disabled = true; return; }
+  const rival = state.players[target].position;
   const slope = interceptSlope(own, rival, state.players[state.side].mass,
-    state.players[1 - state.side].mass, state.side, state.radius, Number($("#bump-force").value));
+    state.players[target].mass, state.side, state.radius, Number($("#bump-force").value));
   direct.disabled = flank.disabled = slope === null;
   $(".examples span").textContent = slope === null ? "Rival out of reach; choose a safe path" : "Assuming a straight rival path";
   if (direct.disabled) return;
@@ -118,29 +123,41 @@ function suggestPaths() {
 function updateScreen() {
   if (!state || startupFailed) return;
   const { side, phase, players, locked } = state;
-  $("#side").textContent = `You are ${side === 0 ? "Blue" : "Red"}${phase === "planning" ? " · choose a path" : ""}`;
+  const group = players.length > 2;
+  const host = !group || state.host === side;
+  const connected = state.connected?.filter(Boolean).length || 0;
+  $("#party-link").hidden = group;
+  $("#start").hidden = !group || phase !== "lobby" || !host;
+  $("#start").disabled = !mountainReady || connected < 2;
+  $("#roster").hidden = !group;
+  $("#blue").hidden = $("#red").hidden = group;
+  if (group) $("#roster").textContent = players.map((player, index) =>
+    `${player.name}: ${phase === "lobby" ? state.connected?.[index] ? "joined" : "empty" : player.eliminated ? "OUT" : locked[index] ? "ready" : "choosing"}`).join(" · ");
+  $("#side").textContent = phase === "lobby" ? `You are ${DUEL_NAMES[side]} · ${connected}/4 joined · ${host ? "invite friends, then Start" : "waiting for host"}`
+    : `You are ${DUEL_NAMES[side]}${players[side].eliminated && phase !== "finished" ? " · eliminated, spectating" : phase === "planning" ? " · choose a path" : ""}`;
   $("#blue").textContent = `Blue · ${players[0].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[0] ? "ready" : "choosing"}`;
   $("#red").textContent = `${state.bot ? "Bot" : "Red"} · ${players[1].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[1] ? "ready" : state.botAt && !state.bot ? `joining in ${Math.max(0, Math.ceil((state.botAt - Date.now()) / 1000))}s` : "choosing"}`;
   $("#stage").textContent = `Round ${state.round} · ${state.round >= 3 ? "ruins + " : ""}rim shrinks after launch`;
-  const canEdit = mountainReady && phase === "planning" && !locked[side];
+  const canEdit = mountainReady && phase === "planning" && !locked[side] && !players[side].eliminated;
   $("#equation").disabled = $("#lock").disabled = !canEdit;
   $("#bump-force").disabled = !canEdit;
   const mathField = document.querySelector("math-field");
   if (mathField) mathField.readOnly = !canEdit;
   $("#view").disabled = !mountainReady || players[side].eliminated;
-  $("#reset").disabled = !mountainReady;
-  $("#resign").disabled = !mountainReady || phase === "finished";
+  $("#reset").disabled = $("#again").disabled = !mountainReady || !host;
+  $("#again").textContent = host ? "Play again →" : "Waiting for host to restart";
+  $("#resign").disabled = !mountainReady || phase === "finished" || phase === "lobby" || players[side].eliminated;
   $("#lock").textContent = locked[side] ? "Locked ✓" : "Lock in";
   $("#result-screen").hidden = phase !== "finished" || Boolean(replayFrames);
   document.querySelectorAll("[data-aim]").forEach((button) => { button.disabled = !canEdit; });
-  if (phase === "planning" && locked[side]) $("#error").textContent = "Locked in. Waiting for the other player.";
-  if (phase === "planning" && !locked[side]) { suggestPaths(); drawPreview(); }
+  if (phase === "planning" && locked[side]) $("#error").textContent = players[side].eliminated ? "Watching the remaining players." : "Locked in. Waiting for the other players.";
+  if (canEdit) { suggestPaths(); drawPreview(); }
   if (phase === "finished") {
-    const win = state.winner === (side === 0 ? "Blue" : "Red");
+    const win = state.winner === DUEL_NAMES[side];
     const resigned = state.resignedBy != null;
     $("#result-title").textContent = resigned ? win ? "You win!" : "You resigned" : state.winner === "Draw" ? "It's a draw" : win ? "You held the summit!" : "You fell from the summit";
     $("#result-detail").textContent = resigned
-      ? `${state.resignedBy === 0 ? "Blue" : state.bot ? "The bot" : "Red"} resigned. ${state.bot && state.winner === "Red" ? "The bot" : state.winner} wins this round.`
+      ? `${state.bot && state.resignedBy === 1 ? "The bot" : DUEL_NAMES[state.resignedBy]} resigned. ${state.bot && state.winner === "Red" ? "The bot" : state.winner} wins this round.`
       : state.winner === "Draw" ? "Both characters went over the edge." : `${state.bot && state.winner === "Red" ? "The bot" : state.winner} stayed on top. Try a new path and predict the collision.`;
   }
 }
@@ -160,7 +177,7 @@ function receiveState(message) {
   view.setDuelRound?.(state.round, state.radius);
   updateLoading();
   if (oldPhase !== "finished" && state.phase === "finished") {
-    const localTeam = state.side === 0 ? "Blue" : "Red";
+    const localTeam = DUEL_NAMES[state.side];
     const properties = {
       opponent_type: state.bot || solo ? "ai" : "human",
       outcome: state.winner === "Draw" ? "draw" : state.winner === localTeam ? "win" : "loss",
@@ -183,7 +200,11 @@ function receiveState(message) {
     view.setViewMode("follow");
     summitView = false;
   }
-  if (state.phase === "running" && previewLine) { view.removeCurve(previewLine); previewLine = null; }
+  if ((state.phase === "running" || state.players[state.side].eliminated) && previewLine) { view.removeCurve(previewLine); previewLine = null; }
+  if (state.players.length > 2 && state.room && room.searchParams.get("players") !== "4") {
+    room.searchParams.set("players", "4");
+    history.replaceState(null, "", room);
+  }
   updateScreen();
 }
 
@@ -221,8 +242,13 @@ socket?.addEventListener("message", ({ data }) => {
   if (message.type === "shape") { view.setPlayerShape(message.side, message.mask); return; }
   if (message.type === "replay") { replayFrames = message.frames; replayStarted = Date.now(); return; }
   if (message.type !== "state") return;
-  if (![0, 1].includes(message.side) || !Array.isArray(message.players) || message.players.length !== 2 ||
-      !message.players.every((player) => player?.position && Number.isFinite(player.mass)) || !Array.isArray(message.locked)) {
+  if (room.searchParams.get("players") === "4" && message.players?.length === 2) {
+    showConnectionError("Group rooms need the updated game server. Restart npm start locally, or redeploy the online server, then retry."); return;
+  }
+  if (!Array.isArray(message.players) || ![2, 4].includes(message.players.length) ||
+      !Number.isInteger(message.side) || message.side < 0 || message.side >= message.players.length ||
+      !message.players.every((player) => player?.position && Number.isFinite(player.mass)) ||
+      !Array.isArray(message.locked) || message.locked.length !== message.players.length) {
     showConnectionError("The duel server sent an invalid starting state. Restart it, then retry."); return;
   }
   receiveState(message);
@@ -265,9 +291,13 @@ function restart() {
 }
 $("#reset").addEventListener("click", restart);
 $("#again").addEventListener("click", restart);
+$("#start").addEventListener("click", () => {
+  if (!startupFailed && state?.phase === "lobby" && state.host === state.side && socket?.readyState === WebSocket.OPEN)
+    socket.send(JSON.stringify({ type: "start" }));
+});
 $("#resign").addEventListener("click", () => {
   if (startupFailed || !state || state.phase === "finished" || !mountainReady) return;
-  const team = state.side === 0 ? "Blue" : "Red";
+  const team = DUEL_NAMES[state.side];
   if (!window.confirm(`Resign as ${team}? Your opponent will win this round.`)) return;
   if (solo) { if (resignDuel(duel, state.side)) publishSolo(); }
   else if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "resign" }));
@@ -277,7 +307,7 @@ $("#invite").addEventListener("click", async () => {
     await navigator.clipboard.writeText(location.href);
     window.posthog?.capture("bump_invite_copied", { opponent_type: "human" });
     $("#invite").textContent = "Link copied ✓";
-    setTimeout(() => $("#invite").textContent = "Invite friend ↗", 1600);
+    setTimeout(() => $("#invite").textContent = "Copy invite ↗", 1600);
   } catch { $("#error").textContent = "Copy failed. Share the URL in your address bar."; }
 });
 $("#view").addEventListener("click", () => {
