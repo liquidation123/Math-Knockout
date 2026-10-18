@@ -26,7 +26,13 @@ Group rooms need the online WebSocket server; they do not use the offline bot.
 
 The Node/WebSocket server (`server.js`) owns online rooms, side assignments, bot matchmaking, countdowns, and the authoritative simulation. The bot sees positions and masses, never the player's hidden equation. It chooses a varied dodge path. The arena rim shrinks between rounds; ruins enter on round 3. A short replay follows a final collision. Interrupted connections can rejoin the same room with a session token.
 
-On static hosting without a configured WebSocket backend, Quick Match runs the same Bump simulation against a browser bot. Online invites require a persistent server and `BUMP_SERVER_URL` at build time. Static hosting alone cannot host multiplayer rooms.
+The browser tries the current site's WebSocket server by default, so Render and
+local/LAN Node hosting need no `BUMP_SERVER_URL`. When the website and multiplayer
+server are separate (for example, Vercel plus Render), set `BUMP_SERVER_URL` to
+the persistent server's HTTPS/WSS address at build time. If Quick Match cannot
+connect within 10 seconds, it runs the same simulation against a browser bot.
+Invite and group rooms never fall back to a fake local match. Static hosting alone
+cannot host multiplayer rooms.
 
 The editable mountain source is `assets/mountain.blend`; `tools/build_mountain.py` exports the browser GLB. The exported GLB is about 2.1 MB. `src/mountain.js` loads it once, and `src/scene.js` renders the arena, characters, previews, and camera views.
 

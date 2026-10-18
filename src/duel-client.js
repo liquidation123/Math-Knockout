@@ -4,7 +4,7 @@ import { DUEL_NAMES, chooseBotEquation, createDuel, duelTarget, insideDuel, inte
 import { takeFixedSteps } from "./physics.js";
 import { createView } from "./scene.js";
 import { readSavedMask } from "./saved-character.js";
-import { BUMP_SERVER_URL, duelSocketUrl } from "./duel-connection.js";
+import { duelSocketUrl } from "./duel-connection.js";
 
 const $ = (selector) => document.querySelector(selector);
 const room = new URL(location.href);
@@ -24,10 +24,9 @@ const quick = room.searchParams.get("quick") === "1";
 $("#party-link").hidden = room.searchParams.get("players") === "4";
 const canFallback = !localPage && quick;
 const backendStart = Date.now();
-let solo = canFallback && !BUMP_SERVER_URL;
+let solo = false;
 let duel, soloStartAt = 0, previous = 0;
 const soloClock = { accumulator: 0 };
-if (solo) $("#invite").hidden = true;
 function updateLoading() {
   // A loaded model alone is not enough: the server must assign a real side.
   $("#loading").hidden = mountainReady && !!state && !startupFailed;
@@ -56,15 +55,14 @@ view.ready.then(() => {
 view.setViewMode("character");
 const connectionHelp = localPage
   ? "Cannot reach the Bump Duel server. Stop the old server and run npm start again; open the address it prints, then retry."
-  : "Online Bump Duel is unavailable. Please retry later or use Change mode to play Projectile Duel.";
+  : "Online Bump Duel could not connect. Retry, or check that the multiplayer server is running. Static hosts such as Vercel need BUMP_SERVER_URL set to a live WebSocket server.";
 try {
-  if (!solo) {
-    if (!localPage && !BUMP_SERVER_URL) throw new Error("No online duel server is configured.");
-    const address = new URL(duelSocketUrl(room.href));
-    const token = room.searchParams.get("room") && sessionStorage.getItem("duel:" + room.searchParams.get("room"));
-    if (token) address.searchParams.set("resume", token);
-    socket = new WebSocket(address.href);
-  }
+  // Render and LAN hosts serve multiplayer at the page's own address too.
+  // A configured BUMP_SERVER_URL still overrides this same-origin default.
+  const address = new URL(duelSocketUrl(room.href));
+  const token = room.searchParams.get("room") && sessionStorage.getItem("duel:" + room.searchParams.get("room"));
+  if (token) address.searchParams.set("resume", token);
+  socket = new WebSocket(address.href);
 } catch (error) {
   if (!canFallback) showConnectionError(connectionHelp, error);
 }
@@ -369,5 +367,4 @@ function frame() {
   view.render();
   requestAnimationFrame(frame);
 }
-if (solo) startSolo();
 requestAnimationFrame(frame);

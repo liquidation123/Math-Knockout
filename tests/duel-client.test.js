@@ -50,7 +50,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
       posthog: { capture: (name, properties) => analytics.push({ name, properties }) },
     },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
-    buildPreview, forwardDirection, safeTravelPath, insideDuel, interceptSlope, sessionStorage, BUMP_SERVER_URL: serverUrl,
+    buildPreview, forwardDirection, safeTravelPath, insideDuel, interceptSlope, sessionStorage,
     DUEL_NAMES, chooseBotEquation, createDuel, duelTarget, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel, takeFixedSteps,
     Date: FakeDate, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame(fn) { frames.push(fn); },
     console: { error: (...args) => errors.push(args) },
@@ -64,6 +64,39 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     } };
 }
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test("Render, custom domains and LAN hosts use their own multiplayer server without extra configuration", async () => {
+  for (const origin of ["https://math-knockout-2.onrender.com", "https://game.example.com", "http://192.168.1.20:5173"]) {
+    const ui = setup({ pageUrl: origin + "/bump.html?room=online-test&players=4" });
+    assert.equal(ui.socket.url, origin.replace(/^http/, "ws") + "/?room=online-test&players=4");
+    assert.equal(ui.errors.length, 0);
+    const duel = createDuel(4); duel.phase = "lobby";
+    ui.message({ type: "state", side: 0, host: 0, connected: [true, true, false, false], ...duel });
+    ui.resolveMountain(); await flush();
+    assert.equal(ui.element("#loading").hidden, true);
+    assert.equal(ui.element("#start").disabled, false);
+  }
+});
+
+test("hosted Quick Match tries online first and does not replace a connected match with a local bot", async () => {
+  const ui = setup({ pageUrl: "https://math-knockout-2.onrender.com/bump.html?quick=1" });
+  assert.equal(ui.socket.url, "wss://math-knockout-2.onrender.com/?quick=1");
+  ui.resolveMountain(); ui.state(); await flush();
+  ui.setNow(10001); ui.frame(); await flush();
+  assert.equal(ui.socket.readyState, 1);
+  assert.equal(ui.element("#loading").hidden, true);
+  assert.notEqual(ui.element("#invite").hidden, true);
+  assert.equal(ui.errors.length, 0);
+});
+
+test("an unavailable same-origin invite server fails clearly rather than silently becoming a solo match", () => {
+  const ui = setup({ pageUrl: "https://game.example.com/bump.html?room=online-test&players=4" });
+  ui.socket.emit("error", new Error("Connection refused"));
+  assert.equal(ui.element("#retry").hidden, false);
+  assert.match(ui.element("#loading-message").textContent, /server is running.*BUMP_SERVER_URL/);
+  assert.equal(ui.element("#start").disabled, true);
+  assert.equal(ui.element("#lock").disabled, true);
+});
 
 test("group lobby supports Green and Gold, host start, spectator controls and the same invite URL", async () => {
   const url = "http://localhost/bump.html?room=group-test&players=4";
@@ -233,10 +266,12 @@ test("static hosting starts a local dodge bot after ten seconds and launches wit
   await flush();
   ui.resolveMountain();
   await flush();
-  assert.equal(ui.socket, undefined);
-  assert.equal(ui.element("#loading").hidden, true);
-  assert.match(ui.element("#red").textContent, /joining in 10s/);
+  assert.equal(ui.socket.url, "wss://math-knockout.vercel.app/?quick=1");
+  assert.equal(ui.element("#loading").hidden, false);
+  ui.socket.emit("error"); ui.socket.emit("close");
   ui.setNow(10001); ui.frame();
+  await flush(); ui.frame();
+  assert.equal(ui.socket.readyState, 3);
   assert.match(ui.element("#red").textContent, /Bot · ready/);
   ui.element("#form").submit({ preventDefault() {} });
   ui.frame();
@@ -267,6 +302,8 @@ test("Bump force is labelled, sent with the locked equation, and disabled after 
 test("solo Bump force refreshes its landing preview without a multiplayer server", async () => {
   const ui = setup({ pageUrl: "https://math-knockout.vercel.app/bump.html?quick=1" });
   ui.resolveMountain(); await flush();
+  ui.socket.emit("error"); ui.socket.emit("close");
+  ui.setNow(10001); ui.frame(); await flush();
   const force = ui.element("#bump-force");
   force.value = ".5"; force.input();
   const lowForceLanding = ui.element("#location").textContent;
@@ -274,7 +311,7 @@ test("solo Bump force refreshes its landing preview without a multiplayer server
   assert.notEqual(ui.element("#location").textContent, lowForceLanding);
   ui.element("#form").submit({ preventDefault() {} });
   assert.equal(force.disabled, true);
-  assert.equal(ui.socket, undefined);
+  assert.equal(ui.socket.readyState, 3);
   assert.equal(ui.errors.length, 0);
 });
 
