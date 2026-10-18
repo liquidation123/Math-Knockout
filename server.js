@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { chooseBotEquation, createDuel, launchDuel, lockEquation, setDuelBody, updateDuel } from "./src/duel.js";
+import { chooseBotEquation, createDuel, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel } from "./src/duel.js";
 import { takeFixedSteps } from "./src/physics.js";
 import { posthogServerLogger } from "./src/posthog-server-logs.js";
 
@@ -81,7 +81,7 @@ const inkFromMask = (mask) => (mask.match(/1/g) || []).length * 100 / 10240;
 function publish(room) {
   room.clients.forEach((socket, side) => send(socket, {
     type: "state", side, players: room.duel.players, phase: room.duel.phase,
-    locked: room.duel.locked, winner: room.duel.winner, startAt: room.startAt,
+    locked: room.duel.locked, winner: room.duel.winner, resignedBy: room.duel.resignedBy, startAt: room.startAt,
     room: room.id, bot: room.bot, botAt: room.botAt, round: room.duel.round, radius: room.duel.radius,
     token: room.tokens[side],
   }));
@@ -164,6 +164,14 @@ sockets.on("connection", (socket, request) => {
       setDuelBody(room.duel, side, mask);
       room.clients.forEach((client) => send(client, { type: "shape", side, mask }));
       publish(room);
+    } else if (message.type === "resign") {
+      if (resignDuel(room.duel, side)) {
+        clearTimeout(room.countdownTimer);
+        clearTimeout(room.botTimer);
+        room.botTimer = null;
+        room.startAt = 0;
+        publish(room);
+      }
     } else if (message.type === "reset") {
       resetRoom(room);
       publish(room);

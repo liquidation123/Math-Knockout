@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#1686d8">
-    <meta name="description" content="Out-Mathed is a local two-player equation battle. Shape your shot, hit your rivals, and be the last team standing.">
-    <title>Out-Mathed — Every curve counts</title>
+    <meta name="description" content="Choose Projectile Duel or Bump Duel in Out-Mathed.">
+    <title>Out-Mathed</title>
     <link rel="icon" href="data:,">
     <link rel="preload" href="/assets/hero-landscape.jpg" as="image">
     <link rel="stylesheet" href="/style.css">
@@ -15,57 +15,37 @@
     <main class="home">
       <div class="landscape" aria-hidden="true"></div>
       <div class="sky-shade" aria-hidden="true"></div>
-
       <header class="site-header">
-        <a class="brand" href="/" aria-label="Out-Mathed home">
-          <span class="brand-mark" aria-hidden="true">∑</span>
-          <span>OUT-MATHED</span>
-        </a>
+        <a class="brand" href="/" aria-label="Out-Mathed home"><span class="brand-mark" aria-hidden="true">∑</span> OUT-MATHED</a>
         <button class="guide-trigger" id="guide-trigger" type="button">How to play <span aria-hidden="true">↗</span></button>
       </header>
-
       <section class="hero" aria-labelledby="hero-title">
-        <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> THE EQUATION ARENA <span class="eyebrow-line" aria-hidden="true"></span></p>
         <h1 id="hero-title">out-mathed</h1>
-        <p class="tagline">One mountain. Two ways to out-math your rival.</p>
-        <section id="modes" class="mode-choices" aria-label="Choose a game mode">
-          <article class="mode-card">
+        <nav id="modes" class="mode-choices" aria-label="Choose a game mode">
+          <div class="mode-card">
             <a class="play-button" href="/create.html?mode=projectile">Projectile Duel</a>
-            <p>One screen · Three characters per team.<br>Plot a glowing shot. Set Force. Fire with recoil.</p>
-            <a class="quick-play" href="/play.html">Play with starter characters →</a>
-          </article>
-          <article class="mode-card">
+            <a class="quick-play" href="/play.html" aria-label="Play Projectile Duel with starter characters">Play with starter characters →</a>
+          </div>
+          <div class="mode-card">
             <a class="play-button" href="/create.html?mode=bump&amp;quick=1">Bump Duel</a>
-            <p>Find a rival online, or face a bot after 10 seconds.<br>Draw, choose a path, and knock them off.</p>
-            <a class="quick-play" href="/bump.html?quick=1">Play with starter characters →</a>
-            <a class="quick-play" href="/create.html?mode=bump">Invite a friend →</a>
-          </article>
-        </section>
-        <p class="play-note">CHOOSE A MODE <span aria-hidden="true">·</span> DRAW YOUR CHARACTER <span aria-hidden="true">·</span> ALL BRAINS</p>
+            <a class="quick-play" href="/bump.html?quick=1" aria-label="Play Bump Duel with starter characters">Play with starter characters →</a>
+          </div>
+        </nav>
       </section>
-
-      <footer class="site-footer">
-        <span>MAKE EVERY CURVE COUNT</span>
-        <span>BLUE <span class="versus">VS</span> RED <span class="footer-star" aria-hidden="true">✳</span> LAST TEAM STANDING WINS</span>
-      </footer>
     </main>
-
     <dialog class="guide" id="guide" aria-labelledby="guide-title">
-      <form method="dialog"><button class="guide-close" aria-label="Close how to play" type="submit">×</button></form>
-      <p class="guide-kicker">THE SHORT VERSION</p>
+      <form method="dialog"><button class="guide-close" aria-label="Close how to play">×</button></form>
       <h2 id="guide-title">How to play</h2>
       <ol>
-        <li><span>01</span><div><strong>Choose and draw</strong><p>Pick a mode, draw within 20L of ink, or jump in with starter characters.</p></div></li>
-        <li><span>02</span><div><strong>Projectile Duel</strong><p>Take turns on one screen. Select a teammate, preview an equation, choose Force, then fire. Shots pierce enemies; stone walls block them.</p></div></li>
-        <li><span>03</span><div><strong>Bump Duel</strong><p>Copy the invite link into a second tab or device. Lock secret equations, launch together, and win by contact knockback. No bullets or projectile damage.</p></div></li>
+        <li><strong>Choose a mode.</strong> Draw a character or use a starter character.</li>
+        <li><strong>Projectile Duel:</strong> Plot an equation, set the force, and fire at the other team.</li>
+        <li><strong>Bump Duel:</strong> Plot a path and knock your opponent off the arena.</li>
       </ol>
-      <a class="guide-play" href="/#modes">CHOOSE A MODE <span aria-hidden="true">↗</span></a>
     </dialog>
     <script>
       const guide = document.querySelector('#guide');
       document.querySelector('#guide-trigger').addEventListener('click', () => guide.showModal());
       guide.addEventListener('click', (event) => { if (event.target === guide) guide.close(); });
-      document.querySelector('.guide-play').addEventListener('click', () => guide.close());
     </script>
   </body>
 </html>

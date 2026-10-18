@@ -1,6 +1,6 @@
 import { buildPreview } from "./equations.js";
 import { forwardDirection } from "./aiming.js";
-import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, safeTravelPath, setDuelBody, updateDuel } from "./duel.js";
+import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, resignDuel, safeTravelPath, setDuelBody, updateDuel } from "./duel.js";
 import { takeFixedSteps } from "./physics.js";
 import { createView } from "./scene.js";
 import { readSavedMask } from "./saved-character.js";
@@ -40,7 +40,7 @@ function showConnectionError(message, error) {
   $("#retry").hidden = false;
   $("#side").textContent = "Connection unavailable";
   $("#error").textContent = "Offline";
-  for (const id of ["#equation", "#lock", "#reset", "#view", "#again", "#bump-force"]) $(id).disabled = true;
+  for (const id of ["#equation", "#lock", "#reset", "#resign", "#view", "#again", "#bump-force"]) $(id).disabled = true;
   document.querySelectorAll("[data-aim]").forEach((button) => { button.disabled = true; });
   console.error("Bump Duel:", message, error || "");
   socket?.close();
@@ -129,6 +129,7 @@ function updateScreen() {
   if (mathField) mathField.readOnly = !canEdit;
   $("#view").disabled = !mountainReady || players[side].eliminated;
   $("#reset").disabled = !mountainReady;
+  $("#resign").disabled = !mountainReady || phase === "finished";
   $("#lock").textContent = locked[side] ? "Locked ✓" : "Lock in";
   $("#result-screen").hidden = phase !== "finished" || Boolean(replayFrames);
   document.querySelectorAll("[data-aim]").forEach((button) => { button.disabled = !canEdit; });
@@ -136,8 +137,11 @@ function updateScreen() {
   if (phase === "planning" && !locked[side]) { suggestPaths(); drawPreview(); }
   if (phase === "finished") {
     const win = state.winner === (side === 0 ? "Blue" : "Red");
-    $("#result-title").textContent = state.winner === "Draw" ? "It's a draw" : win ? "You held the summit!" : "You fell from the summit";
-    $("#result-detail").textContent = state.winner === "Draw" ? "Both characters went over the edge." : `${state.bot && state.winner === "Red" ? "The bot" : state.winner} stayed on top. Try a new path and predict the collision.`;
+    const resigned = state.resignedBy != null;
+    $("#result-title").textContent = resigned ? win ? "You win!" : "You resigned" : state.winner === "Draw" ? "It's a draw" : win ? "You held the summit!" : "You fell from the summit";
+    $("#result-detail").textContent = resigned
+      ? `${state.resignedBy === 0 ? "Blue" : state.bot ? "The bot" : "Red"} resigned. ${state.bot && state.winner === "Red" ? "The bot" : state.winner} wins this round.`
+      : state.winner === "Draw" ? "Both characters went over the edge." : `${state.bot && state.winner === "Red" ? "The bot" : state.winner} stayed on top. Try a new path and predict the collision.`;
   }
 }
 
@@ -185,7 +189,7 @@ function receiveState(message) {
 
 function publishSolo() {
   receiveState({ type: "state", side: 0, players: duel.players, locked: duel.locked,
-    phase: duel.phase, winner: duel.winner, round: duel.round, radius: duel.radius,
+    phase: duel.phase, winner: duel.winner, resignedBy: duel.resignedBy, round: duel.round, radius: duel.radius,
     startAt: soloStartAt, bot: !!duel.bot, botAt: duel.botAt });
 }
 
@@ -261,6 +265,13 @@ function restart() {
 }
 $("#reset").addEventListener("click", restart);
 $("#again").addEventListener("click", restart);
+$("#resign").addEventListener("click", () => {
+  if (startupFailed || !state || state.phase === "finished" || !mountainReady) return;
+  const team = state.side === 0 ? "Blue" : "Red";
+  if (!window.confirm(`Resign as ${team}? Your opponent will win this round.`)) return;
+  if (solo) { if (resignDuel(duel, state.side)) publishSolo(); }
+  else if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "resign" }));
+});
 $("#invite").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(location.href);
@@ -284,7 +295,7 @@ function frame() {
   }
   if (solo && duel && mountainReady && !startupFailed) {
     const now = Date.now();
-    if (!duel.bot && now >= duel.botAt) { duel.bot = true; duel.botAt = 0; }
+    if (duel.phase !== "finished" && !duel.bot && now >= duel.botAt) { duel.bot = true; duel.botAt = 0; }
     if (duel.bot && duel.phase === "planning" && !duel.locked[1])
       lockEquation(duel, 1, chooseBotEquation(duel));
     if (duel.phase === "planning" && duel.locked.every(Boolean)) {

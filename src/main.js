@@ -3,7 +3,7 @@ import { createEquationInput } from "./curve-input.js";
 import { readSavedMask } from "./saved-character.js";
 import { createView } from "./scene.js";
 import { takeFixedSteps } from "./physics.js";
-import { createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES } from "./combat.js";
+import { createRound, updateRound, firePreview, resignRound, selectCharacter, TEAM_NAMES } from "./combat.js";
 import { buildPreview } from "./equations.js";
 import { shotDirection } from "./aiming.js";
 import { chooseProjectileAction } from "./ai.js";
@@ -123,6 +123,17 @@ forceSlider.addEventListener("input", () => {
   forceValue.textContent = Number(forceSlider.value).toFixed(1) + "×";
 });
 document.querySelector("#restart").addEventListener("click", resetRound);
+const resign = document.querySelector("#resign");
+resign.addEventListener("click", () => {
+  if (round.result) return;
+  const team = opponent.isAI ? 0 : round.currentTeam;
+  if (!window.confirm(`Resign as ${TEAM_NAMES[team]}? ${TEAM_NAMES[1 - team]} will win this round.`)) return;
+  if (!resignRound(round, team)) return;
+  opponent.cancel();
+  aiPending = false;
+  view.finishProjectilePOV();
+  updateReadout();
+});
 povToggle.addEventListener("change", () => {
   view.setProjectilePOVEnabled(povToggle.checked);
 });
@@ -239,6 +250,7 @@ function updateReadout() {
   document.querySelector("#caster").textContent = round.result ? "" : selected.name + " selected";
   fire.disabled = Boolean(!mountainReady || !preview || preview.error || round.result || round.attack ||
     selected.eliminated || Math.abs(selected.position.z - 0.5) > 0.05 || (opponent.isAI && round.currentTeam === 1));
+  resign.disabled = Boolean(!mountainReady || round.result);
   document.querySelectorAll(".math-input, math-field, #equation-type, #force, #symbols button, #implicit-options select, #launch-point").forEach((input) => {
     input.disabled = opponent.isAI && round.currentTeam === 1;
   });

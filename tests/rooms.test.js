@@ -87,6 +87,10 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   assert.ok(Math.abs(blue.state.radius - 7.55) < 1e-8);
   assert.equal(blue.state.phase, "planning");
   assert.ok(blue.state.players.every((p) => Math.hypot(p.position.x, p.position.y) < blue.state.radius));
+  red.socket.send(JSON.stringify({ type: "resign", side: 0 })); // The server must use the socket's side.
+  await waitUntil(() => blue.state.phase === "finished" && red.state.phase === "finished");
+  assert.equal(blue.state.winner, "Blue");
+  assert.equal(red.state.resignedBy, 1);
 
   // Leaving clears the departing player's old drawing on the remaining client.
   const mask = "1".repeat(100) + "0".repeat(10140);

@@ -2,7 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildPreview } from "../src/equations.js";
 import { ARENA, OBSTACLES, FIXED_STEP, takeFixedSteps } from "../src/physics.js";
-import { createRound, updateRound, firePreview, selectCharacter, TURN_INTERVAL } from "../src/combat.js";
+import { createRound, updateRound, firePreview, resignRound, selectCharacter, TURN_INTERVAL } from "../src/combat.js";
+
+test("resigning gives the other team the round and stops combat", () => {
+  const round = createRound();
+  assert.equal(resignRound(round, 0), true);
+  assert.equal(round.result.winner, "Red");
+  assert.match(round.result.reason, /Blue resigned/);
+  assert.equal(resignRound(round, 1), false);
+  const time = round.time;
+  updateRound(round, 1);
+  assert.equal(round.time, time);
+});
 
 function groundedRound(automatic = false) {
   const round = createRound(automatic);

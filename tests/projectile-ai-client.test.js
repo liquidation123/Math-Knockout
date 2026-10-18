@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
 import { shotDirection } from "../src/aiming.js";
-import { createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES } from "../src/combat.js";
+import { createRound, updateRound, firePreview, resignRound, selectCharacter, TEAM_NAMES } from "../src/combat.js";
 import { takeFixedSteps } from "../src/physics.js";
 
 const source = (await readFile(new URL("../src/main.js", import.meta.url), "utf8")).replace(/^import .+;\n/gm, "");
@@ -21,15 +21,15 @@ async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, exp
   const opponent = { difficulty: "ai", isAI: true, cancel: () => { generation += 1; },
     token: () => generation, current: (token) => token === generation, wait: async () => true,
     choosing() {}, speak: async (name, text) => { spoken.push({ name, text }); return true; } };
-  const view = { ready: Promise.resolve(), resetCinematic() {}, removeCurve() {}, drawCurve() {}, onCharacterClick() {}, canvas: { focus() {} } };
+  const view = { ready: Promise.resolve(), resetCinematic() {}, finishProjectilePOV() {}, removeCurve() {}, drawCurve() {}, onCharacterClick() {}, canvas: { focus() {} } };
   const api = runInNewContext(source + "\n;({ getRound: () => round, playAiTurn, resetRound });", {
     URLSearchParams, location: { search: "?opponent=ai" }, createOpponentUI: () => opponent,
     document: { querySelector: node, querySelectorAll: () => [], createElement: () => node("new-label") },
-    window: { addEventListener(name, fn) { windowEvents[name] = fn; } },
+    window: { confirm: () => true, addEventListener(name, fn) { windowEvents[name] = fn; } },
     createView: () => view, createVictoryScreen: () => ({ hide() {}, show() {} }),
     createEquationInput: () => ({ key: () => "0", preview: (origin, direction) => buildPreview("0", origin, direction) }),
     readSavedMask: async () => null, chooseProjectileAction, buildPreview, shotDirection,
-    createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES, takeFixedSteps, requestAnimationFrame() {},
+    createRound, updateRound, firePreview, resignRound, selectCharacter, TEAM_NAMES, takeFixedSteps, requestAnimationFrame() {},
     console: { info() {}, warn() {}, error: (...args) => errors.push(args) },
   });
   await new Promise((resolve) => setImmediate(resolve));
@@ -61,18 +61,20 @@ test("Projectile AI never acts on Blue's turn or after the round is finished", a
   assert.equal(ui.spoken.length, 0);
 });
 
-test("restart, leaving and elimination prevent a late projectile decision from firing", async () => {
-  for (const change of ["restart", "leave", "eliminate"]) {
+test("restart, leaving, resignation and elimination prevent a late projectile decision from firing", async () => {
+  for (const change of ["restart", "leave", "resign", "eliminate"]) {
     let finish;
     const ui = await setup(() => new Promise((resolve) => { finish = resolve; }));
     const pending = ui.playAiTurn();
     await new Promise((resolve) => setImmediate(resolve));
     if (change === "restart") ui.resetRound();
     if (change === "leave") ui.windowEvents.pagehide();
+    if (change === "resign") ui.nodes.get("#resign").click();
     if (change === "eliminate") ui.getRound().players[3].eliminated = true;
     finish({ playerIndex: 3, expression: "0", force: 1 });
     await pending;
     assert.equal(ui.getRound().castCount, 0, change);
+    if (change === "resign") assert.equal(ui.getRound().result.reason, "Blue resigned");
     assert.equal(ui.errors.length, 0);
   }
 });

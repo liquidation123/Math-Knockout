@@ -38,6 +38,14 @@ export function selectCharacter(round, index) {
   return true;
 }
 
+export function resignRound(round, team) {
+  if (round.result || ![0, 1].includes(team)) return false;
+  round.attack = null;
+  round.result = { winner: TEAM_NAMES[1 - team], reason: TEAM_NAMES[team] + " resigned" };
+  round.message = round.result.reason + ". " + round.result.winner + " wins the round.";
+  return true;
+}
+
 function applyRecoil(attacker, attack) {
   const origin = attack.origin;
   const next = attack.path.find((point) => point.x !== origin.x || point.y !== origin.y);
