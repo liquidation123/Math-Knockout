@@ -50,6 +50,8 @@ if (typeof document !== 'undefined') {
   const arena = document.querySelector('#arena-link');
   const mode = new URLSearchParams(window.location?.search || '').get('mode');
   arena.href = mode === 'bump' ? '/bump.html' : '/play.html';
+  const opponent = new URLSearchParams(window.location?.search || '').get('opponent');
+  if (['easy', 'medium', 'hard'].includes(opponent)) arena.href += '?opponent=' + opponent;
   arena.textContent = mode === 'bump' ? 'Start Bump Duel →' : 'Start Projectile Duel →';
   const history = [];
   let tool = 'pencil';

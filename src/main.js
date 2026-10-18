@@ -4,6 +4,13 @@ import { readSavedMask } from "./saved-character.js";
 import { createView } from "./scene.js";
 import { takeFixedSteps } from "./physics.js";
 import { createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES } from "./combat.js";
+import { buildPreview } from "./equations.js";
+import { chooseProjectileAction } from "./ai.js";
+import { createOpponentUI } from "./opponent-ui.js";
+
+const opponent = createOpponentUI();
+let aiPending = false, aiFailed = false, leaving = false;
+window.addEventListener("pagehide", () => { leaving = true; opponent.cancel(); });
 
 const view = createView(
   document.querySelector("#arena"), document.querySelector("#hud"), document.querySelector("#controls"),
@@ -38,7 +45,7 @@ resultView.innerHTML = 'View result as <select id="result-perspective">' +
 document.querySelector("#controls").insertBefore(resultView, status);
 const resultPerspective = resultView.querySelector("select");
 const teamParam = new URLSearchParams(location.search).get("team");
-resultPerspective.value = TEAM_NAMES.find((name) => name.toLowerCase() === teamParam?.toLowerCase()) || "";
+resultPerspective.value = TEAM_NAMES.find((name) => name.toLowerCase() === teamParam?.toLowerCase()) || (opponent.isAI ? "Blue" : "");
 const victory = createVictoryScreen(() => {
   resetRound();
   expression.focus();
@@ -57,6 +64,9 @@ let observedAttack = null;
 const equationInput = createEquationInput(() => { previewKey = ""; refreshPreview(); });
 
 function resetRound() {
+  opponent.cancel();
+  aiPending = false;
+  aiFailed = false;
   round = createRound();
   clock = { accumulator: 0 };
   previousTime = undefined;
@@ -87,11 +97,11 @@ function refreshPreview() {
   const key = equationInput.key() + "|" + index + "|" + origin.x + "," + origin.y + "|" + Boolean(round.result);
   if (key === previewKey) return;
   previewKey = key;
-  preview = round.result ? null : equationInput.preview(origin, player.team === 0 ? 1 : -1);
+  preview = round.result || (opponent.isAI && round.currentTeam === 1) ? null : equationInput.preview(origin, player.team === 0 ? 1 : -1);
   if (previewCurve) view.removeCurve(previewCurve);
   if (branchCurve) view.removeCurve(branchCurve);
   branchCurve = preview?.selection ? view.drawCurve(preview.sections, 0x71849e, true) : null;
-  previewCurve = preview && !preview.error ? view.drawCurve([preview.path], 0xffffff, true) : null;
+  previewCurve = preview && !preview.error ? view.drawCurve([preview.path], 0xfff26c, "aim") : null;
   document.querySelectorAll(".math-input").forEach((input) => input.setAttribute("aria-invalid",
     String(Boolean(preview?.error) && !input.closest("[data-equation-type]").hidden)));
   errorLabel.textContent = preview?.error || "";
@@ -105,7 +115,7 @@ povToggle.addEventListener("change", () => {
   view.setProjectilePOVEnabled(povToggle.checked);
 });
 view.onCharacterClick((index) => {
-  if (round.result) return;
+  if (round.result || (opponent.isAI && round.currentTeam === 1)) return;
   if (selectCharacter(round, index)) {
     console.info("Selected", round.players[index].name);
   } else {
@@ -114,9 +124,10 @@ view.onCharacterClick((index) => {
   refreshPreview();
   updateReadout();
 }, (point) => {
-  if (!round.result && !round.attack) equationInput.selectPoint(point, preview);
+  if (!round.result && !round.attack && !(opponent.isAI && round.currentTeam === 1)) equationInput.selectPoint(point, preview);
 });
 fire.addEventListener("click", () => {
+  if (opponent.isAI && round.currentTeam === 1) return;
   refreshPreview();
   if (firePreview(round, round.selected[round.currentTeam], preview, Number(forceSlider.value))) {
     console.info("Fired", round.players[round.attack.attackerIndex].name, round.attack.equation.name);
@@ -124,6 +135,34 @@ fire.addEventListener("click", () => {
     updateReadout();
   }
 });
+
+async function playAiTurn() {
+  if (!opponent.isAI || leaving || aiPending || aiFailed || !mountainReady || round.currentTeam !== 1 || round.attack || round.result) return;
+  if (!round.players.some((player) => player.team === 1 && !player.eliminated && Math.abs(player.position.z - 0.5) < 0.05)) return;
+  aiPending = true;
+  const token = opponent.token();
+  const activeRound = round;
+  opponent.choosing(true);
+  try {
+    await opponent.wait(150, token);
+    const action = await chooseProjectileAction(activeRound, opponent.difficulty, {
+      pause: () => opponent.wait(0, token), cancelled: () => !opponent.current(token),
+    });
+    if (!opponent.current(token) || !action || round.result || round.currentTeam !== 1 || round.attack) return;
+    opponent.choosing(false);
+    const player = round.players[action.playerIndex];
+    if (player.eliminated || Math.abs(player.position.z - 0.5) > 0.05) return;
+    if (!selectCharacter(round, action.playerIndex)) return;
+    if (!await opponent.speak(player.name, `y = ${action.expression} · Force ${action.force}×`, token)) return;
+    if (!opponent.current(token) || player.eliminated || round.result) return;
+    const aim = buildPreview(action.expression, player.position, -1);
+    firePreview(round, action.playerIndex, aim, action.force);
+  } catch (error) {
+    if (opponent.current(token)) { aiFailed = true; round.message = "AI could not choose. Restart to retry."; console.error("Projectile AI:", error); }
+  } finally {
+    if (opponent.current(token)) { aiPending = false; opponent.choosing(false); }
+  }
+}
 
 function updateSimulation(dt) {
   if (round.result) return;
@@ -152,6 +191,8 @@ function updateSimulation(dt) {
     }
   });
   if (round.result) {
+    opponent.cancel();
+    aiPending = false;
     console.info("Round complete", round.result);
     view.finishProjectilePOV();
   } else if (teamBefore !== round.currentTeam) console.info("Turn:", TEAM_NAMES[round.currentTeam]);
@@ -177,7 +218,10 @@ function updateReadout() {
   document.querySelector("#turn").textContent = round.result ? "Round complete" : TEAM_NAMES[round.currentTeam] + "'s turn";
   document.querySelector("#caster").textContent = round.result ? "" : selected.name + " selected";
   fire.disabled = Boolean(!mountainReady || !preview || preview.error || round.result || round.attack ||
-    selected.eliminated || Math.abs(selected.position.z - 0.5) > 0.05);
+    selected.eliminated || Math.abs(selected.position.z - 0.5) > 0.05 || (opponent.isAI && round.currentTeam === 1));
+  document.querySelectorAll(".math-input, #equation-type, #force, #symbols button, #implicit-options select, #launch-point").forEach((input) => {
+    input.disabled = opponent.isAI && round.currentTeam === 1;
+  });
   if (status.textContent !== round.message) status.textContent = round.message;
   if (round.result) victory.show(round);
 }
@@ -193,6 +237,7 @@ function animate(timestamp) {
   const seconds = previousTime === undefined ? 0 : (timestamp - previousTime) / 1000;
   previousTime = timestamp;
   takeFixedSteps(clock, seconds, updateSimulation);
+  playAiTurn();
   drawAttack();
   refreshPreview();
   view.updateCinematic(round.result ? null : round.attack, seconds, povToggle.checked);
