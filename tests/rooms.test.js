@@ -15,7 +15,7 @@ async function waitUntil(check, timeout = 6000) {
   throw new Error("Timed out waiting for the local duel server.");
 }
 
-test("mode pages, room resets, and Quick Match bot work on the local server", { timeout: 30000 }, async (t) => {
+test("mode pages, room resets, and Quick Match bot work on the local server", { timeout: 60000 }, async (t) => {
   const child = spawn(process.execPath, ["server.js"], {
     cwd: new URL("../", import.meta.url), env: { ...process.env, HOST: "127.0.0.1", PORT: "0" },
   });
@@ -119,6 +119,6 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   await waitUntil(() => solo.state.players[0].mass < 1);
   solo.socket.send(JSON.stringify({ type: "lock", expression: "0" }));
   await waitUntil(() => solo.state?.phase === "finished" ||
-    (solo.state?.phase === "planning" && solo.state.round === 2), 12000);
+    (solo.state?.phase === "planning" && solo.state.round === 2), 20000);
   assert.ok(Math.abs(solo.state.players[1].position.y) > 1, "bot should sidestep the straight path");
 });

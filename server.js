@@ -13,10 +13,13 @@ const host = process.env.HOST || "127.0.0.1";
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".woff2": "font/woff2",
   ".css": "text/css",
   ".jpg": "image/jpeg",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".webp": "image/webp",
   ".glb": "model/gltf-binary",
 };
 
@@ -25,13 +28,13 @@ const server = createServer(async (request, response) => {
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
   const filename = resolve(root, "." + decodeURIComponent(pathname));
 
-  if (!filename.startsWith(root) || filename.includes(sep + ".git" + sep)) {
+  if (!filename.startsWith(root) || filename.slice(root.length).split(sep).some((part) => part.startsWith("."))) {
     response.writeHead(403).end("Forbidden");
     return;
   }
 
   try {
-    const asset = /\.(glb|jpg|png|js|css|svg)$/.test(filename);
+    const asset = /\.(glb|jpg|png|js|mjs|woff2|webp|css|svg)$/.test(filename);
     const info = asset && await stat(filename);
     const etag = asset && `"${info.size}-${info.mtimeMs}"`;
     if (etag && request.headers["if-none-match"] === etag) {

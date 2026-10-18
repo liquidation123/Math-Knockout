@@ -3,7 +3,7 @@ import bpy
 import math
 import random
 from pathlib import Path
-from mathutils import Vector
+from mathutils import Vector  # pyright: ignore[reportMissingImports]  # Provided by Blender at runtime.
 
 random.seed(17)
 ROOT = Path(__file__).resolve().parents[1]

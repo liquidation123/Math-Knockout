@@ -26,6 +26,10 @@ form:focus-within { border-color: #68a9d6; box-shadow: 0 0 0 3px #8dcafa55; }
 form label { display: flex; align-items: center; gap: 11px; margin-left: 10px; color: #20537a; font-size: 24px; font-weight: 750; white-space: nowrap; }
 form label i { width: 14px; height: 14px; border-radius: 50%; background: #42a4e9; }
 #equation { min-width: 0; flex: 1; border: 0; outline: 0; background: none; color: #1a3851; padding: 9px 3px; font: 20px ui-monospace, monospace; }
+#form math-field.math-field { min-width: 0; flex: 1; padding: 3px 8px; border: 0; border-radius: 7px;
+  background: #fff; color: #1a3851; font-size: 24px; --caret-color: #218bc9; }
+#form math-field.math-field:focus-within { box-shadow: 0 0 0 2px #68a9d6; }
+#form math-field::part(virtual-keyboard-toggle), #form math-field::part(menu-toggle) { display: none; }
 button { border: 0; border-radius: 8px; padding: 9px 12px; font: 700 12px system-ui, sans-serif; cursor: pointer; transition: background .15s, transform .15s; }
 button:hover { transform: translateY(-1px); } button:disabled { opacity: .5; cursor: default; transform: none; }
 button:focus-visible, input:focus-visible { outline: 3px solid #69b6ed; outline-offset: 2px; }

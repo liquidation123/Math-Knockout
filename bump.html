@@ -7,7 +7,7 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/duel.css">
   <link rel="stylesheet" href="/view-gizmo.css">
-  <script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/","math-expression-evaluator":"/src/math-parser-browser.js"}}</script>
+  <script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/","math-expression-evaluator":"/src/math-parser-browser.js","mathlive":"/node_modules/mathlive/mathlive.min.mjs"}}</script>
 </head>
 <body>
   <main>
@@ -20,7 +20,7 @@
     <div id="countdown" aria-live="assertive" hidden><small>Both paths are locked</small><strong>3</strong><small>Get ready to launch</small></div>
     <section id="controls" class="panel" aria-label="Equation launcher">
       <div class="control-top"><strong id="side">Finding your side…</strong><span id="location">Your landing point appears on the mountain.</span></div>
-      <form id="form"><label for="equation"><i aria-hidden="true"></i> y =</label><input id="equation" value="0" maxlength="200" autocomplete="off" spellcheck="false" aria-describedby="error location" disabled><button id="lock" type="submit" disabled>Lock in</button></form>
+      <form id="form"><label for="equation"><i aria-hidden="true"></i> y =</label><input id="equation" class="math-input" value="0" maxlength="200" autocomplete="off" spellcheck="false" aria-describedby="error location" disabled><button id="lock" type="submit" disabled>Lock in</button></form>
       <div class="examples" aria-label="Suggested paths"><span>Assuming a straight rival path</span><button type="button" data-aim="direct">Intercept</button><button type="button" data-aim="flank">Glance</button><span id="error" role="status"></span></div>
       <div class="control-bottom"><span>Click the arena to look around · Esc releases mouse</span><button id="view" type="button" disabled>Summit view</button><button id="reset" type="button" disabled>Restart</button></div>
     </section>
@@ -28,6 +28,12 @@
   </main>
   <script type="module">
     document.querySelector("#retry").addEventListener("click", () => location.reload());
+    import("/src/math-field.js").then(({ upgradeMathInputs }) => {
+      upgradeMathInputs();
+      document.querySelector("math-field")?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") { event.preventDefault(); document.querySelector("#form").requestSubmit(); }
+      });
+    }).catch((error) => console.warn("MathLive unavailable; using the plain equation input.", error));
     // Catch missing modules and renderer failures before the game can initialize.
     import("/src/duel-client.js").catch((error) => {
       document.querySelector("#loading").hidden = false;

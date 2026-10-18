@@ -1,5 +1,12 @@
+// Read the fighter saved by the character creator (see src/character-geometry.js).
+// With no id this returns the latest drawing; with an id it returns that exact one.
+export function loadSavedCharacter(id) {
+  const text = sessionStorage.getItem(id ? `outMathedCharacter:${id}` : "outMathedCharacter");
+  return text ? JSON.parse(text) : null;
+}
+
 export async function readSavedMask() {
-  const saved = JSON.parse(sessionStorage.getItem("outMathedCharacter"));
+  const saved = loadSavedCharacter();
   if (!saved?.image) return null;
   const image = new Image();
   image.src = saved.image;

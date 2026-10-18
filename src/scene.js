@@ -45,6 +45,23 @@ export function frameCamera(camera, aspect, topInset = 0, bottomInset = 0) {
   camera.updateProjectionMatrix();
 }
 
+export function createAimGeometry(points, width) {
+  const vertices = [];
+  for (let index = 1; index < points.length; index++) {
+    const a = points[index - 1], b = points[index];
+    const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy);
+    if (!length) continue;
+    // Two triangles form a visible ribbon even when WebGL lines stay one pixel wide.
+    const nx = -dy / length * width / 2, ny = dx / length * width / 2;
+    const leftA = [a.x + nx, a.y + ny, a.z], rightA = [a.x - nx, a.y - ny, a.z];
+    const leftB = [b.x + nx, b.y + ny, b.z], rightB = [b.x - nx, b.y - ny, b.z];
+    vertices.push(...leftA, ...rightA, ...leftB, ...leftB, ...rightA, ...rightB);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  return geometry;
+}
+
 export function createView(container, hud, controls, mode = "projectile") {
   const scene = new THREE.Scene();
 
@@ -78,7 +95,7 @@ export function createView(container, hud, controls, mode = "projectile") {
   const dotTexture = new THREE.CanvasTexture(dotCanvas);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.localClippingEnabled = true;
   const curveBounds = [
     new THREE.Plane(new THREE.Vector3(1, 0, 0), ARENA.halfWidth),
@@ -551,6 +568,17 @@ export function createView(container, hud, controls, mode = "projectile") {
       return group;
     }
     for (const points of clipCurveSections(sections)) {
+      if (preview === "aim") {
+        for (const [width, tint, order] of [[0.42, 0x10283c, 2], [0.22, color, 3]]) {
+          const material = new THREE.MeshBasicMaterial({ color: tint, side: THREE.DoubleSide,
+            depthTest: false, depthWrite: false, fog: false, toneMapped: false });
+          material.clippingPlanes = curveBounds;
+          const ribbon = new THREE.Mesh(createAimGeometry(points, width), material);
+          ribbon.renderOrder = order;
+          group.add(ribbon);
+        }
+        continue;
+      }
       const geometry = new THREE.BufferGeometry().setFromPoints(
         points.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
       );

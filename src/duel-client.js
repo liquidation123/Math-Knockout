@@ -1,8 +1,9 @@
 import { buildPreview } from "./equations.js";
-import { insideDuel, interceptSlope, safeTravelPath } from "./duel.js";
+import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, safeTravelPath, setDuelBody, updateDuel } from "./duel.js";
+import { takeFixedSteps } from "./physics.js";
 import { createView } from "./scene.js";
 import { readSavedMask } from "./saved-character.js";
-import { duelSocketUrl } from "./duel-connection.js";
+import { BUMP_SERVER_URL, duelSocketUrl } from "./duel-connection.js";
 
 const $ = (selector) => document.querySelector(selector);
 const room = new URL(location.href);
@@ -16,6 +17,11 @@ let startupFailed = false, leaving = false;
 let socket;
 let state, previewLine, preview, lastKey = "", summitView = false, previewStarted = 0, lastCount = 0;
 let replayFrames = null, replayStarted = 0;
+const localPage = ["localhost", "127.0.0.1", "[::1]"].includes(room.hostname);
+const solo = !localPage && !BUMP_SERVER_URL;
+let duel, soloStartAt = 0, previous = 0;
+const soloClock = { accumulator: 0 };
+if (solo) $("#invite").hidden = true;
 function updateLoading() {
   // A loaded model alone is not enough: the server must assign a real side.
   $("#loading").hidden = mountainReady && !!state && !startupFailed;
@@ -42,15 +48,16 @@ view.ready.then(() => {
   showConnectionError("The mountain could not load. Check the connection, then retry.", error);
 });
 view.setViewMode("character");
-const localPage = ["localhost", "127.0.0.1", "[::1]"].includes(room.hostname);
 const connectionHelp = localPage
   ? "Cannot reach the Bump Duel server. Stop the old server and run npm start again; open the address it prints, then retry."
   : "Online Bump Duel is unavailable. Please retry later or use Change mode to play Projectile Duel.";
 try {
+  if (!solo) {
   const address = new URL(duelSocketUrl(room.href));
   const token = room.searchParams.get("room") && sessionStorage.getItem("duel:" + room.searchParams.get("room"));
   if (token) address.searchParams.set("resume", token);
   socket = new WebSocket(address.href);
+  }
 } catch (error) {
   showConnectionError(connectionHelp, error);
 }
@@ -94,6 +101,7 @@ function suggestPaths() {
   const slope = interceptSlope(own, rival, state.players[state.side].mass,
     state.players[1 - state.side].mass, state.side, state.radius);
   direct.disabled = flank.disabled = slope === null;
+  $(".examples span").textContent = slope === null ? "Rival out of reach; choose a safe path" : "Assuming a straight rival path";
   if (direct.disabled) return;
   direct.dataset.equation = `${slope.toFixed(3)}*x`;
   flank.dataset.equation = `${(slope + (rival.y > own.y ? -.12 : .12)).toFixed(3)}*x`;
@@ -108,6 +116,8 @@ function updateScreen() {
   $("#stage").textContent = `Round ${state.round} · ${state.round >= 3 ? "ruins + " : ""}rim shrinks after launch`;
   const canEdit = mountainReady && phase === "planning" && !locked[side];
   $("#equation").disabled = $("#lock").disabled = !canEdit;
+  const mathField = document.querySelector("math-field");
+  if (mathField) mathField.readOnly = !canEdit;
   $("#view").disabled = !mountainReady || players[side].eliminated;
   $("#reset").disabled = !mountainReady;
   $("#lock").textContent = locked[side] ? "Locked ✓" : "Lock in";
@@ -122,20 +132,7 @@ function updateScreen() {
   }
 }
 
-socket?.addEventListener("message", ({ data }) => {
-  if (startupFailed || leaving) return;
-  let message;
-  try { message = JSON.parse(data); }
-  catch (error) { showConnectionError("The duel server sent an unreadable message. Restart the server, then retry.", error); return; }
-  if (!message || typeof message !== "object") { showConnectionError("The duel server sent an invalid message. Restart it, then retry."); return; }
-  if (message.type === "error") { $("#error").textContent = message.error; return; }
-  if (message.type === "shape") { view.setPlayerShape(message.side, message.mask); return; }
-  if (message.type === "replay") { replayFrames = message.frames; replayStarted = Date.now(); return; }
-  if (message.type !== "state") return;
-  if (![0, 1].includes(message.side) || !Array.isArray(message.players) || message.players.length !== 2 ||
-      !message.players.every((player) => player?.position && Number.isFinite(player.mass)) || !Array.isArray(message.locked)) {
-    showConnectionError("The duel server sent an invalid starting state. Restart it, then retry."); return;
-  }
+function receiveState(message) {
   const oldPhase = state?.phase;
   state = message;
   if (state.token && state.room) sessionStorage.setItem("duel:" + state.room, state.token);
@@ -164,6 +161,47 @@ socket?.addEventListener("message", ({ data }) => {
   }
   if (state.phase === "running" && previewLine) { view.removeCurve(previewLine); previewLine = null; }
   updateScreen();
+}
+
+function publishSolo() {
+  receiveState({ type: "state", side: 0, players: duel.players, locked: duel.locked,
+    phase: duel.phase, winner: duel.winner, round: duel.round, radius: duel.radius,
+    startAt: soloStartAt, bot: !!duel.bot, botAt: duel.botAt });
+}
+
+async function startSolo() {
+  duel = createDuel();
+  const current = duel;
+  duel.botAt = Date.now() + 10000;
+  soloStartAt = 0;
+  previous = 0;
+  soloClock.accumulator = 0;
+  try {
+    const mask = await readSavedMask();
+    if (current !== duel) return;
+    if (mask && /^[01]{10240}$/.test(mask) && (mask.match(/1/g) || []).length <= 2099) {
+      setDuelBody(duel, 0, mask); view.setPlayerShape(0, mask);
+    }
+  } catch { $("#error").textContent = "Saved drawing unavailable; using a starter character."; }
+  if (current !== duel) return;
+  publishSolo();
+}
+
+socket?.addEventListener("message", ({ data }) => {
+  if (startupFailed || leaving) return;
+  let message;
+  try { message = JSON.parse(data); }
+  catch (error) { showConnectionError("The duel server sent an unreadable message. Restart the server, then retry.", error); return; }
+  if (!message || typeof message !== "object") { showConnectionError("The duel server sent an invalid message. Restart it, then retry."); return; }
+  if (message.type === "error") { $("#error").textContent = message.error; return; }
+  if (message.type === "shape") { view.setPlayerShape(message.side, message.mask); return; }
+  if (message.type === "replay") { replayFrames = message.frames; replayStarted = Date.now(); return; }
+  if (message.type !== "state") return;
+  if (![0, 1].includes(message.side) || !Array.isArray(message.players) || message.players.length !== 2 ||
+      !message.players.every((player) => player?.position && Number.isFinite(player.mass)) || !Array.isArray(message.locked)) {
+    showConnectionError("The duel server sent an invalid starting state. Restart it, then retry."); return;
+  }
+  receiveState(message);
 });
 socket?.addEventListener("error", (error) => { if (!state) showConnectionError(connectionHelp, error); });
 socket?.addEventListener("close", (event) => {
@@ -185,10 +223,16 @@ document.querySelectorAll("[data-aim]").forEach((button) => button.addEventListe
 $("#form").addEventListener("submit", (event) => {
   event.preventDefault();
   drawPreview();
-  if (!startupFailed && mountainReady && !preview?.error && state?.phase === "planning" && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "lock", expression: $("#equation").value }));
+  if (startupFailed || !mountainReady || preview?.error || state?.phase !== "planning") return;
+  if (solo) {
+    const error = lockEquation(duel, 0, $("#equation").value);
+    if (error) $("#error").textContent = error;
+    else publishSolo();
+  } else if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "lock", expression: $("#equation").value }));
 });
 function restart() {
-  if (!startupFailed && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "reset" }));
+  if (solo) startSolo();
+  else if (!startupFailed && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "reset" }));
 }
 $("#reset").addEventListener("click", restart);
 $("#again").addEventListener("click", restart);
@@ -206,6 +250,23 @@ $("#view").addEventListener("click", () => {
   $("#view").textContent = summitView ? "First person" : "Summit view";
 });
 function frame() {
+  if (solo && duel && mountainReady && !startupFailed) {
+    const now = Date.now();
+    if (!duel.bot && now >= duel.botAt) { duel.bot = true; duel.botAt = 0; }
+    if (duel.bot && duel.phase === "planning" && !duel.locked[1])
+      lockEquation(duel, 1, chooseBotEquation(duel));
+    if (duel.phase === "planning" && duel.locked.every(Boolean)) {
+      duel.phase = "countdown";
+      soloStartAt = now + 3000;
+    }
+    if (duel.phase === "countdown" && now >= soloStartAt) launchDuel(duel);
+    if (duel.phase === "running") {
+      takeFixedSteps(soloClock, Math.min(.1, (now - (previous || now)) / 1000), (step) => updateDuel(duel, step));
+      if (duel.phase === "finished") { replayFrames = [...duel.replay]; replayStarted = now; }
+    }
+    previous = now;
+    publishSolo();
+  }
   if (state && !startupFailed) {
     const replayIndex = replayFrames && Math.floor((Date.now() - replayStarted) / 140);
     if (replayFrames && replayIndex >= replayFrames.length) {
@@ -232,4 +293,5 @@ function frame() {
   view.render();
   requestAnimationFrame(frame);
 }
+if (solo) startSolo();
 requestAnimationFrame(frame);

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
-import { createDuel, insideDuel, interceptSlope, safeTravelPath } from "../src/duel.js";
+import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, safeTravelPath, setDuelBody, updateDuel } from "../src/duel.js";
+import { takeFixedSteps } from "../src/physics.js";
 import { duelSocketUrl } from "../src/duel-connection.js";
 
 // Run the real client with a fake DOM/socket, without needing WebGL in Node.
@@ -13,14 +14,16 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   const nodes = new Map();
   const element = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
-      hidden: id === "#retry", disabled: true, textContent: "", value: "0",
+      hidden: id === "#retry", disabled: true, textContent: "", value: "0", style: {},
       addEventListener(name, handler) { this[name] = handler; },
     });
     return nodes.get(id);
   };
   let resolveMountain, rejectMountain, socket;
   const ready = new Promise((resolve, reject) => { resolveMountain = resolve; rejectMountain = reject; });
-  const errors = [], windowEvents = {};
+  const errors = [], windowEvents = {}, frames = [];
+  let now = 0;
+  class FakeDate extends Date { static now() { return now; } }
   const sessionStorage = { getItem: () => null, setItem() {} };
   const view = {
     ready, setViewMode() {}, removeCurve() {}, drawCurve() {}, setPlayerShape() {},
@@ -41,13 +44,18 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     URL, location: new URL(pageUrl),
     document: { querySelector: element, querySelectorAll: () => [] }, window: { addEventListener(name, handler) { windowEvents[name] = handler; } },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
-    buildPreview, safeTravelPath, insideDuel, interceptSlope, sessionStorage,
-    duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame() {},
+    buildPreview, safeTravelPath, insideDuel, interceptSlope, sessionStorage, BUMP_SERVER_URL: serverUrl,
+    chooseBotEquation, createDuel, launchDuel, lockEquation, setDuelBody, updateDuel, takeFixedSteps,
+    Date: FakeDate, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame(fn) { frames.push(fn); },
     console: { error: (...args) => errors.push(args) },
   });
   const message = (data) => socket.emit("message", { data: JSON.stringify(data) });
   const state = (side = 0) => message({ type: "state", side, ...createDuel() });
-  return { element, resolveMountain, rejectMountain, socket, message, state, errors, windowEvents };
+  return { element, resolveMountain, rejectMountain, socket, message, state, errors, windowEvents,
+    setNow: (time) => { now = time; }, frame: () => {
+      const index = frames.findIndex((fn) => fn.name === "frame");
+      if (index >= 0) frames.splice(index, 1)[0]();
+    } };
 }
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -139,4 +147,24 @@ test("insecure deployment configuration fails with an error instead of crashing 
   assert.equal(ui.element("#lock").disabled, true);
   assert.match(ui.element("#loading-message").textContent, /Online Bump Duel/);
   assert.equal(ui.errors.length, 1);
+});
+
+test("static hosting starts a local dodge bot after ten seconds and launches with the real duel physics", async () => {
+  const ui = setup({ pageUrl: "https://math-knockout.vercel.app/bump.html?quick=1" });
+  await flush();
+  ui.resolveMountain();
+  await flush();
+  assert.equal(ui.socket, undefined);
+  assert.equal(ui.element("#loading").hidden, true);
+  assert.match(ui.element("#red").textContent, /joining in 10s/);
+  ui.setNow(10001); ui.frame();
+  assert.match(ui.element("#red").textContent, /Bot · ready/);
+  ui.element("#form").submit({ preventDefault() {} });
+  ui.frame();
+  assert.equal(ui.element("#countdown").hidden, false);
+  ui.setNow(13002); ui.frame();
+  assert.equal(ui.element("#countdown").hidden, true);
+  for (let time = 13102; time < 21302; time += 100) { ui.setNow(time); ui.frame(); }
+  assert.match(ui.element("#stage").textContent, /Round [12]/);
+  assert.equal(ui.errors.length, 0);
 });
