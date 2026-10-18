@@ -7,6 +7,7 @@
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/game.css">
     <link rel="stylesheet" href="/opponent.css">
+    <link rel="stylesheet" href="/view-gizmo.css">
     <script type="importmap">
       {
         "imports": {
@@ -27,7 +28,7 @@
         <div class="hud-title">
           <h1>Projectile Duel</h1>
           <p class="character-note" id="character-note">Playing with the starter character · <a href="/create.html">Draw your own</a></p>
-          <div class="opponent-row"><label for="opponent">Opponent</label><select id="opponent"><option value="human">Human opponent</option><option value="easy">Easy AI</option><option value="medium">Medium AI</option><option value="hard">Hard AI</option></select><span id="opponent-help"></span></div>
+          <div class="opponent-row"><label for="opponent">Opponent</label><select id="opponent"><option value="human">Local player</option><option value="ai">AI opponent</option></select><span id="opponent-help"></span></div>
         </div>
         <section class="teams" aria-label="Team health">
           <div class="team blue">

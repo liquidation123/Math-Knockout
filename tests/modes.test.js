@@ -27,9 +27,10 @@ test("homepage offers both modes, with separate entry points and relevant contro
   assert.match(projectile, /location\.replace\("\/bump\.html" \+ location\.search\)/);
   assert.match(bump, /src\/duel-client\.js/);
   assert.doesNotMatch(bump, /id="force"|id="fire"|src\/main\.js/);
-  for (const page of [projectile, bump]) assert.match(page, /href="\/">Change mode/);
+  assert.match(projectile, /href="\/">Change mode/);
+  assert.match(bump, /<a href="\/">out-mathed<\/a>/);
   const drawing = await source("create.js");
-  assert.match(drawing, /mode === 'bump' \? '\/bump\.html' : '\/play\.html'/);
+  assert.match(drawing, /mode === 'bump' \? `\/bump\.html/);
   assert.match(await source("src/scene.js"), /createMountain\(scene\)/);
   assert.match(await source("src/duel-client.js"), /createView\(.+, "bump"\)/);
 });
@@ -43,23 +44,20 @@ test("shared mountain uses the branch asset, lighting, and exact stone collision
     await createMountain(scene);
   } finally { GLTFLoader.prototype.load = original; }
   assert.equal(asset, "/assets/mountain.glb");
-  assert.equal(scene.background.getHex(), 0x78c8fb, "Both modes have a sky-blue background in every camera direction.");
-  assert.ok(scene.children.some((object) => object.isHemisphereLight && object.intensity === 1.5));
-  assert.ok(scene.children.some((object) => object.isDirectionalLight && object.intensity === 2.3));
-  const water = scene.getObjectByName("Water below mountain");
-  assert.ok(water?.isMesh, "Both modes share a visible sea below the mountain.");
-  assert.equal(water.geometry.type, "PlaneGeometry");
-  assert.ok(water.material.map.isDataTexture, "Ripples need no extra asset request.");
-  assert.equal(water.rotation.x, 0, "The sea lies on XY, with Z as height.");
-  assert.ok(water.position.z < -21.5, "The sea is below the cliff base.");
-  assert.ok(water.position.z < ARENA.fallHeight, "Water must not prevent fall elimination.");
-  const blocks = scene.children.filter((object) => object.isMesh && object !== water);
-  assert.equal(blocks.length, OBSTACLES.length);
-  blocks.forEach((mesh, index) => {
-    const box = OBSTACLES[index];
-    assert.deepEqual(mesh.position.toArray(), [box.x, box.y, box.height / 2]);
-    const shape = mesh.geometry.parameters;
-    assert.deepEqual([shape.width, shape.height, shape.depth], [box.width, box.depth, box.height]);
+  assert.equal(scene.background, null); // The authored sky and clouds show behind the model.
+  assert.ok(scene.children.some((object) => object.isHemisphereLight && object.intensity === 0.9));
+  assert.ok(scene.children.some((object) => object.isDirectionalLight && object.intensity === 2.7));
+  const stones = scene.children.find((object) => object.isInstancedMesh);
+  assert.equal(stones.count, OBSTACLES.length * 12);
+  const matrix = new THREE.Matrix4(), center = new THREE.Vector3();
+  OBSTACLES.forEach((box, index) => {
+    center.set(0, 0, 0);
+    for (let piece = 0; piece < 12; piece++) {
+      stones.getMatrixAt(index * 12 + piece, matrix);
+      center.add(new THREE.Vector3().setFromMatrixPosition(matrix));
+    }
+    center.divideScalar(12);
+    assert.ok(center.distanceTo(new THREE.Vector3(box.x, box.y, box.height / 2)) < 1e-6);
   });
 });
 
@@ -85,8 +83,8 @@ test("physics rim matches the actual GLB grass mesh, not its rectangular boundin
   });
   assert.ok(vertices.every((point) => Math.abs(point.z) < 1e-7));
   for (const point of arenaOutline()) {
-    // Meshopt quantizes positions to about 0.004 world units in this export.
-    assert.ok(vertices.some((vertex) => Math.hypot(vertex.x - point.x, vertex.y - point.y) < 0.005));
+    // Meshopt quantizes positions to roughly 0.005 world units on the larger summit.
+    assert.ok(vertices.some((vertex) => Math.hypot(vertex.x - point.x, vertex.y - point.y) < 0.006));
     assert.ok(insideArena(point.x, point.y));
     assert.equal(insideArena(point.x * 1.001, point.y * 1.001), false);
   }
@@ -135,18 +133,20 @@ test("Projectile Duel has no contact damage or contact impulse", () => {
 
 test("Bump Duel keeps contact knockback without projectile damage and stops at stone walls", () => {
   const duel = createDuel();
-  duel.players[0].position = { x: -7, y: 4, z: 0.5 };
-  duel.players[1].position = { x: 7, y: 4, z: 0.5 };
+  duel.round = 3; // Ruins enter the arena only from the third launch.
+  duel.players[0].position = { x: -4, y: -3, z: 0.5 };
+  duel.players[1].position = { x: 4, y: -3, z: 0.5 };
   lockEquation(duel, 0, "0"); lockEquation(duel, 1, "0"); launchDuel(duel);
   for (let tick = 0; tick < 180; tick += 1) updateDuel(duel, FIXED_STEP);
-  assert.ok(Math.abs(duel.players[0].position.x + 4.5) < 1e-8);
+  assert.ok(Math.abs(duel.players[0].position.x - (-1.9 - duel.players[0].radius)) < 1e-8);
   assert.equal(duel.paths[0].done, true);
   assert.ok(duel.players.every((player) => player.health === 100));
   const collision = createDuel();
   lockEquation(collision, 0, "0"); lockEquation(collision, 1, "0"); launchDuel(collision);
   for (let tick = 0; tick < 1200 && collision.phase === "running"; tick += 1) updateDuel(collision, FIXED_STEP);
-  assert.equal(collision.phase, "finished");
-  assert.ok(collision.players.every((player) => player.health === 100 && player.eliminated));
+  assert.equal(collision.phase, "planning");
+  assert.ok(collision.lastImpact);
+  assert.ok(collision.players.every((player) => player.health === 100 && !player.eliminated));
   assert.equal("attack" in collision, false);
 });
 

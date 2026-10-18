@@ -17,12 +17,12 @@ async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, exp
     return nodes.get(selector);
   };
   let generation = 0;
-  const opponent = { difficulty: "hard", isAI: true, cancel: () => { generation += 1; },
+  const opponent = { difficulty: "ai", isAI: true, cancel: () => { generation += 1; },
     token: () => generation, current: (token) => token === generation, wait: async () => true,
     choosing() {}, speak: async (name, text) => { spoken.push({ name, text }); return true; } };
   const view = { ready: Promise.resolve(), resetCinematic() {}, removeCurve() {}, drawCurve() {}, onCharacterClick() {}, canvas: { focus() {} } };
   const api = runInNewContext(source + "\n;({ getRound: () => round, playAiTurn, resetRound });", {
-    URLSearchParams, location: { search: "?opponent=hard" }, createOpponentUI: () => opponent,
+    URLSearchParams, location: { search: "?opponent=ai" }, createOpponentUI: () => opponent,
     document: { querySelector: node, querySelectorAll: () => [], createElement: () => node("new-label") },
     window: { addEventListener(name, fn) { windowEvents[name] = fn; } },
     createView: () => view, createVictoryScreen: () => ({ hide() {}, show() {} }),

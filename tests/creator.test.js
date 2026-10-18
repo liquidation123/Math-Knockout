@@ -85,8 +85,9 @@ test('canvas tools, ink cap, undo, clear, lock, and saved character', async () =
   let now = 0, tick;
   const saved = {};
   try {
-    globalThis.document = { querySelector: selector => nodes[selector], querySelectorAll: () => buttons };
-    globalThis.window = {};
+    globalThis.document = { querySelector: selector => nodes[selector], querySelectorAll: () => buttons,
+      addEventListener(name, fn) { this[`on${name}`] = fn; } };
+    globalThis.window = { location: { assign(url) { this.destination = url; } } };
     globalThis.sessionStorage = { setItem(key, value) { saved[key] = value; } };
     globalThis.setInterval = fn => { tick = fn; return 1; };
     globalThis.clearInterval = () => {};
@@ -135,6 +136,8 @@ test('canvas tools, ink cap, undo, clear, lock, and saved character', async () =
     assert.equal(character.mask.runs.reduce((sum, run) => sum + run, 0), width * height);
     canvas.fire('pointerdown', pointer(150, 150));
     assert.deepEqual(pixels, beforeFill);
+    document.onkeydown({ key: 'Enter', repeat: false, target: canvas, preventDefault() {} });
+    assert.equal(window.location.destination, nodes['#arena-link'].href);
   } finally {
     globalThis.document = original.document;
     globalThis.window = original.window;

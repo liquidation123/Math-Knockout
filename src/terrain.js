@@ -1,5 +1,5 @@
 // These 96 rim points match the Blender generator's flat playable summit.
-export const ARENA = { halfWidth: 14, depth: 16, power: 2.6, top: 0, thickness: 0.6, fallHeight: -5 };
+export const ARENA = { halfWidth: 14, depth: 17, power: 2.6, top: 0, thickness: 0.6, fallHeight: -5 };
 const outlines = new Map();
 export function arenaOutline(padding = 0) {
   if (!outlines.has(padding)) {

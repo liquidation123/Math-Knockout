@@ -15,7 +15,7 @@ function setup() {
     return nodes.get(selector);
   };
   const ui = runInNewContext(source + "\ncreateOpponentUI();", {
-    URL, AI_LEVELS, location: { href: "https://game.example/play.html?opponent=hard&room=old-room", assign(url) { destination = url; } },
+    URL, AI_LEVELS, location: { href: "https://game.example/play.html?opponent=ai&room=old-room", assign(url) { destination = url; } },
     document: { querySelector: node }, window: { addEventListener() {} },
     setTimeout(fn) { timers.set(++id, fn); return id; }, clearTimeout(key) { timers.delete(key); },
   });
@@ -45,10 +45,10 @@ test("changing opponents invalidates work and navigates to a fresh match, not th
   const { ui, node, destination, timers } = setup();
   const oldToken = ui.token();
   const pending = ui.wait(100, oldToken);
-  node("#opponent").value = "medium";
+  node("#opponent").value = "ai";
   node("#opponent").change();
   assert.equal(await pending, false);
   assert.equal(ui.current(oldToken), false);
   assert.equal(timers.size, 0);
-  assert.equal(destination(), "https://game.example/play.html?opponent=medium");
+  assert.equal(destination(), "https://game.example/play.html?opponent=ai");
 });

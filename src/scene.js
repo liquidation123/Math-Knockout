@@ -5,6 +5,9 @@ import { clipCurveSections } from "./terrain.js";
 import { PROJECTILE_RADIUS } from "./projectile.js";
 import { buildCartesianGrid, coordinateText } from "./grid.js";
 import { effectKind, pathLookAhead } from "./cinematic.js";
+import { createViewGizmo } from "./view-gizmo.js";
+import { bodyFromMask, starterMask } from "./body.js";
+import { createBodyMesh } from "./body-mesh.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -42,38 +45,13 @@ export function frameCamera(camera, aspect, topInset = 0, bottomInset = 0) {
   camera.updateProjectionMatrix();
 }
 
-function starterMask(index, mode) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128; canvas.height = 80;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "white";
-  const red = index >= (mode === "bump" ? 1 : 3);
-  // Simple, distinct silhouettes for players who have not drawn a character.
-  ctx.fillRect(48, 26, 32, 30);
-  ctx.fillRect(42, 32, 7, 17); ctx.fillRect(79, 32, 7, 17);
-  ctx.fillRect(51, 55, 9, 18); ctx.fillRect(68, 55, 9, 18);
-  if (red) {
-    ctx.beginPath();
-    ctx.moveTo(48, 29); ctx.lineTo(42, 5); ctx.lineTo(60, 20);
-    ctx.lineTo(68, 20); ctx.lineTo(86, 5); ctx.lineTo(80, 29);
-    ctx.closePath(); ctx.fill();
-    ctx.fillRect(48, 22, 32, 15);
-  } else {
-    ctx.fillRect(49, 12, 30, 19);
-    ctx.fillRect(57, 4, 14, 9);
-    ctx.fillRect(54, 29, 6, 7); ctx.fillRect(68, 29, 6, 7);
-  }
-  const pixels = ctx.getImageData(0, 0, 128, 80).data;
-  return Array.from({ length: 10240 }, (_, i) => pixels[i * 4 + 3] ? "1" : "0").join("");
-}
-
 export function createAimGeometry(points, width) {
   const vertices = [];
-  for (let index = 1; index < points.length; index += 1) {
+  for (let index = 1; index < points.length; index++) {
     const a = points[index - 1], b = points[index];
     const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy);
     if (!length) continue;
-    // A flat ribbon gives real width; WebGL's ordinary lines are usually one pixel.
+    // Two triangles form a visible ribbon even when WebGL lines stay one pixel wide.
     const nx = -dy / length * width / 2, ny = dx / length * width / 2;
     const leftA = [a.x + nx, a.y + ny, a.z], rightA = [a.x - nx, a.y - ny, a.z];
     const leftB = [b.x + nx, b.y + ny, b.z], rightB = [b.x - nx, b.y - ny, b.z];
@@ -109,8 +87,15 @@ export function createView(container, hud, controls, mode = "projectile") {
   const effects = [];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  const dotCanvas = document.createElement("canvas");
+  dotCanvas.width = dotCanvas.height = 32;
+  const dotBrush = dotCanvas.getContext("2d");
+  dotBrush.fillStyle = "white";
+  dotBrush.beginPath(); dotBrush.arc(16, 16, 15, 0, Math.PI * 2); dotBrush.fill();
+  const dotTexture = new THREE.CanvasTexture(dotCanvas);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.localClippingEnabled = true;
   const curveBounds = [
     new THREE.Plane(new THREE.Vector3(1, 0, 0), ARENA.halfWidth),
@@ -121,8 +106,11 @@ export function createView(container, hud, controls, mode = "projectile") {
   renderer.domElement.tabIndex = 0;
   renderer.domElement.setAttribute("aria-label", "Select a character in the combat arena");
   container.prepend(renderer.domElement);
+  const gizmo = createViewGizmo(container, renderer.domElement, () => activeCamera,
+    (camera) => { activeCamera = camera || overviewCamera(); });
   renderer.domElement.addEventListener("click", () => {
-    if (mode === "bump" && viewMode === "character") renderer.domElement.requestPointerLock?.();
+    if (mode === "bump" && viewMode === "character" && activeCamera === characterCamera)
+      renderer.domElement.requestPointerLock?.();
   });
   document.addEventListener("mousemove", (event) => {
     if (mode !== "bump" || document.pointerLockElement !== renderer.domElement) return;
@@ -131,6 +119,20 @@ export function createView(container, hud, controls, mode = "projectile") {
   });
 
   const ready = createMountain(scene);
+  const duelDisk = new THREE.Mesh(new THREE.CircleGeometry(1, 96),
+    new THREE.MeshBasicMaterial({ color: 0xf0ff8c, transparent: true, opacity: .09, depthWrite: false }));
+  const duelRim = new THREE.Mesh(new THREE.RingGeometry(.989, 1.011, 96),
+    new THREE.MeshBasicMaterial({ color: 0xfff1ae, transparent: true, opacity: .95, depthWrite: false, side: THREE.DoubleSide }));
+  duelDisk.position.z = .035; duelRim.position.z = .08;
+  duelDisk.visible = duelRim.visible = mode === "bump";
+  scene.add(duelDisk, duelRim);
+  if (mode === "bump") scene.userData.stones.count = 0;
+  function setDuelRound(round, radius) {
+    if (mode !== "bump") return;
+    duelDisk.scale.set(radius, radius, 1);
+    duelRim.scale.set(radius, radius, 1);
+    scene.userData.stones.count = round >= 3 ? 24 : 0;
+  }
 
   const gridLines = new THREE.LineSegments(
     new THREE.BufferGeometry(),
@@ -268,6 +270,7 @@ export function createView(container, hud, controls, mode = "projectile") {
       if (!mesh.userData.ready || mesh.position.distanceTo(target) > 4) mesh.position.copy(target);
       else mesh.position.lerp(target, 0.35); // Smooth 20 Hz snapshots for display only.
       mesh.userData.ready = true;
+      if (mode === "bump") mesh.rotation.z = player.angle || 0;
       mesh.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
       if (mesh.userData.drawing) {
         mesh.userData.drawing.scale.setScalar(index === selectedIndex ? 1.12 : 1);
@@ -288,7 +291,15 @@ export function createView(container, hud, controls, mode = "projectile") {
       });
       mesh.userData.drawing = null;
     }
-    mask = mask?.includes("1") ? mask : starterMask(index, mode);
+    mask = mask?.includes("1") ? mask : starterMask(index >= (mode === "bump" ? 1 : 3) ? 1 : 0);
+    if (mode === "bump") {
+      const color = index === 0 ? 0x2889ff : 0xff6b86;
+      const drawing = createBodyMesh(bodyFromMask(mask), color);
+      mesh.add(drawing);
+      mesh.userData.drawing = drawing;
+      mesh.material.visible = false;
+      return;
+    }
     const occupied = [];
     for (let i = 0; i < mask.length; i++) if (mask[i] === "1") occupied.push(i);
     const left = Math.max(0, Math.min(...occupied.map((i) => i % 128)) - 4);
@@ -327,7 +338,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     texture.magFilter = THREE.NearestFilter;
     const drawing = new THREE.Group();
     const aspect = width / height;
-    const art = new THREE.Mesh(new THREE.PlaneGeometry(3.1 * Math.min(aspect, 1), 3.1 / Math.max(aspect, 1)),
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(3.8 * Math.min(aspect, 1), 3.8 / Math.max(aspect, 1)),
       new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.01, depthWrite: false, side: THREE.DoubleSide }));
     drawing.add(art);
     mesh.add(drawing);
@@ -367,6 +378,7 @@ export function createView(container, hud, controls, mode = "projectile") {
 
   function beginProjectilePOV(attack) {
     if (!attack) return;
+    gizmo.exit();
     cinematicAttack = attack;
     cinematicMode = "projectile";
     cinematicTimer = 0;
@@ -527,10 +539,39 @@ export function createView(container, hud, controls, mode = "projectile") {
 
   function drawCurve(sections, color, preview = false) {
     const group = new THREE.Group();
+    if (preview === "duel") {
+      const positions = [];
+      for (const points of clipCurveSections(sections)) {
+        let next = 0;
+        for (let i = 1; i < points.length; i++) {
+          const a = points[i - 1], b = points[i];
+          const length = Math.hypot(b.x - a.x, b.y - a.y);
+          if (length < 1e-6) continue;
+          while (next <= length) {
+            positions.push(new THREE.Vector3(a.x + (b.x - a.x) * next / length,
+              a.y + (b.y - a.y) * next / length, .25));
+            next += .9;
+          }
+          next -= length;
+        }
+      }
+      const geometry = new THREE.BufferGeometry().setFromPoints(positions);
+      geometry.setDrawRange(0, 0);
+      const dots = new THREE.Points(geometry,
+        new THREE.PointsMaterial({ color, map: dotTexture, size: 11, sizeAttenuation: false,
+          transparent: true, alphaTest: .1, depthTest: false, depthWrite: false }));
+      dots.userData.total = positions.length;
+      dots.frustumCulled = false;
+      dots.renderOrder = 5;
+      group.add(dots);
+      scene.add(group);
+      return group;
+    }
     for (const points of clipCurveSections(sections)) {
       if (preview === "aim") {
         for (const [width, tint, order] of [[0.42, 0x10283c, 2], [0.22, color, 3]]) {
-          const material = new THREE.MeshBasicMaterial({ color: tint, side: THREE.DoubleSide, depthTest: false, depthWrite: false, fog: false, toneMapped: false });
+          const material = new THREE.MeshBasicMaterial({ color: tint, side: THREE.DoubleSide,
+            depthTest: false, depthWrite: false, fog: false, toneMapped: false });
           material.clippingPlanes = curveBounds;
           const ribbon = new THREE.Mesh(createAimGeometry(points, width), material);
           ribbon.renderOrder = order;
@@ -581,6 +622,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     povCamera.aspect = aspect;
     povCamera.updateProjectionMatrix();
     renderer.setSize(width, height);
+    gizmo.resize(aspect);
   }
 
   const observer = new ResizeObserver(resize);
@@ -588,6 +630,7 @@ export function createView(container, hud, controls, mode = "projectile") {
   resize();
 
   function setViewMode(mode) {
+    gizmo.exit();
     if (mode === "follow" && viewMode !== "follow") followCamera.position.copy(characterCamera.position);
     viewMode = mode;
     if (mode === "character") lookAtIndex = -1;
@@ -621,6 +664,7 @@ export function createView(container, hud, controls, mode = "projectile") {
 
   return {
     ready,
+    setDuelRound,
     setViewMode,
     updateCharacterCamera,
     setPlayerShape,
@@ -642,10 +686,12 @@ export function createView(container, hud, controls, mode = "projectile") {
     render: () => {
       playerMeshes.forEach((mesh) => {
         if (!mesh.userData.drawing) return;
+        if (mode === "bump") return;
         mesh.userData.drawing.quaternion.copy(activeCamera.quaternion);
         mesh.userData.drawing.rotateZ(mesh.userData.tilt || 0);
       });
       renderer.render(scene, activeCamera);
+      gizmo.update(activeCamera);
     },
   };
 }

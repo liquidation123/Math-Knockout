@@ -59,10 +59,11 @@ if (typeof document !== 'undefined') {
   const clear = document.querySelector('#clear');
   const arena = document.querySelector('#arena-link');
   const inkMeter = document.querySelector('.ink-area');
-  const mode = new URLSearchParams(window.location?.search || '').get('mode');
-  arena.href = mode === 'bump' ? '/bump.html' : '/play.html';
-  const opponent = new URLSearchParams(window.location?.search || '').get('opponent');
-  if (['easy', 'medium', 'hard'].includes(opponent)) arena.href += '?opponent=' + opponent;
+  const params = new URLSearchParams(window.location?.search || '');
+  const mode = params.get('mode');
+  arena.href = mode === 'bump' ? `/bump.html${params.has('quick') ? '?quick=1' : ''}` : '/play.html';
+  const opponent = params.get('opponent');
+  if (opponent === 'ai') arena.href += '?opponent=ai';
   arena.textContent = mode === 'bump' ? 'Start Bump Duel →' : 'Start Projectile Duel →';
   const history = [];
   let tool = 'pencil';
@@ -245,6 +246,12 @@ if (typeof document !== 'undefined') {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
     updateInk();
     say('Canvas cleared. Your ink is back.');
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.repeat || event.target.closest?.('a')) return;
+    event.preventDefault();
+    lock();
+    window.location.assign(arena.href);
   });
   updateInk();
 }

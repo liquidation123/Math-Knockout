@@ -23,7 +23,7 @@ test("the grid has one-unit spacing, spans the platform, and numbers relative to
     assert.equal(line.x2, ARENA.halfWidth);
   }
   assert.deepEqual(grid.axes[0], { x1: -14, y1: 2.7, x2: 14, y2: 2.7 });
-  assert.deepEqual(grid.axes[1], { x1: -9.3, y1: -8, x2: -9.3, y2: 8 });
+  assert.deepEqual(grid.axes[1], { x1: -9.3, y1: -ARENA.depth / 2, x2: -9.3, y2: ARENA.depth / 2 });
   for (const tick of grid.labels.filter((label) => label.kind.endsWith("number"))) {
     const relative = relativeCoordinates(tick, origin);
     close(tick.kind === "x-number" ? relative.x : relative.y, Number(tick.text));
