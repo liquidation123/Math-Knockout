@@ -3,7 +3,7 @@
 Draw a character, then use equations to compete on a mountain. The site has two modes:
 
 - **Projectile Duel** (`play.html`): three characters per team take turns firing equation-shaped shots. Play locally against a friend or one AI opponent.
-- **Bump Duel** (`bump.html`): two characters secretly choose paths and launch together. Collisions push characters; the last one on the summit wins. Use an invite link for an online room, or Quick Match for a bot if no second player joins within 10 seconds.
+- **Bump Duel** (`bump.html`): two to four characters secretly choose paths and launch together. Collisions push characters; the last one on the summit wins. Group invite rooms support up to four humans; Quick Match still finds one rival or adds a bot after 10 seconds.
 
 Both modes use the same Three.js mountain (`assets/mountain.glb`), equation parser, and fixed-step physics. The equation editor uses **MathLive**, styled like a math notebook; it does not use the Desmos API. If MathLive fails to load, plain text inputs still work.
 
@@ -14,6 +14,15 @@ Both modes use the same Three.js mountain (`assets/mountain.glb`), equation pars
 `create.js` saves the image and a compact occupancy mask. `src/character-geometry.js` calculates area, mass, centre of mass, and moment of inertia from that mask. `src/body.js` uses the same mask for the extruded Three.js shape and Bump Duel contact outline. This keeps what you see aligned with what collides. Projectile Duel keeps its existing projectile combat rules.
 
 ## Bump Duel
+
+For a human free-for-all, choose **Group room (2–4)** inside Bump Duel, then use
+**Copy invite** to share the same URL with up to three friends. The host presses
+**Start match** after two to four people have joined. Every surviving player locks
+an equation and Force, then everyone launches together. The last survivor wins;
+eliminated players can watch. Only the host restarts the group match, returning
+everyone to the lobby so more friends can join. Reconnecting within 15 seconds
+keeps your slot and drawing; a longer disconnect eliminates only that player.
+Group rooms need the online WebSocket server; they do not use the offline bot.
 
 The Node/WebSocket server (`server.js`) owns online rooms, side assignments, bot matchmaking, countdowns, and the authoritative simulation. The bot sees positions and masses, never the player's hidden equation. It chooses a varied dodge path. The arena rim shrinks between rounds; ruins enter on round 3. A short replay follows a final collision. Interrupted connections can rejoin the same room with a session token.
 

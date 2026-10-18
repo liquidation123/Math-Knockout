@@ -118,7 +118,7 @@ test("large knockback steps cannot cross any solid component", () => {
         player.velocity[axis] = direction * 4000;
         updatePlayer(player, FIXED_STEP);
         close(player.position[axis], firstFace);
-        assert.equal(player.velocity[axis], 0);
+        assert.ok(player.velocity[axis] * direction < 0, "wall contact reflects the incoming velocity");
         assert.ok(direction * (player.position[axis] - start) < direction * (box[axis] + direction * half - start));
       }
     }

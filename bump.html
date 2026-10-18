@@ -15,10 +15,11 @@
     <section id="arena" aria-label="3D mountain duel"></section>
     <div id="loading" role="status"><span id="loading-message">Connecting to the duel server…</span> <button id="retry" hidden>Retry</button></div>
     <header id="hud" class="panel">
-      <div class="brand"><h1><a href="/">out-mathed</a></h1><button id="invite" type="button">Invite friend ↗</button></div>
+      <div class="brand"><h1><a href="/">out-mathed</a></h1><a id="party-link" href="/bump.html?players=4">Group room (2–4)</a><button id="invite" type="button">Copy invite ↗</button><button id="start" type="button" hidden disabled>Start match</button></div>
       <div class="score"><span id="blue">Blue · waiting</span><span id="stage">Round 1</span><span id="red">Red · waiting</span></div>
+      <div id="roster" aria-label="Group players" aria-live="polite" hidden></div>
     </header>
-    <div id="countdown" aria-live="assertive" hidden><small>Both paths are locked</small><strong>3</strong><small>Get ready to launch</small></div>
+    <div id="countdown" aria-live="assertive" hidden><small>All surviving players are locked</small><strong>3</strong><small>Get ready to launch</small></div>
     <section id="controls" class="panel" aria-label="Equation launcher">
       <div class="control-top"><strong id="side">Finding your side…</strong><span id="location">Your landing point appears on the mountain.</span></div>
       <form id="form"><label for="equation"><i aria-hidden="true"></i> y =</label><input id="equation" class="math-input" value="0" maxlength="200" autocomplete="off" spellcheck="false" aria-describedby="error location" disabled><button id="lock" type="submit" disabled>Lock in</button></form>
