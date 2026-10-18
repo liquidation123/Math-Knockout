@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDuel, insideDuel, lockEquation, launchDuel, travelDistance, travelPath, updateDuel } from "../src/duel.js";
+import { createDuel, insideDuel, interceptSlope, lockEquation, launchDuel,
+  safeTravelPath, setDuelBody, travelDistance, travelPath, updateDuel } from "../src/duel.js";
 import { FIXED_STEP } from "../src/physics.js";
+import { bodyFromMask, starterMask } from "../src/body.js";
 
 function run(blue, red) {
   const duel = createDuel();
@@ -22,27 +24,34 @@ test("two hidden choices are required before a simultaneous launch", () => {
   assert.equal(launchDuel(duel), true);
 });
 
-test("head-on launches collide and knock both players off", () => {
+test("equal head-on launches collide and continue into the shrinking round", () => {
   const duel = run("0", "0");
-  assert.equal(duel.phase, "finished");
-  assert.equal(duel.winner, "Draw");
-  assert.ok(duel.players.every((player) => player.eliminated));
+  assert.ok(duel.lastImpact);
+  assert.equal(duel.phase, "planning");
+  assert.equal(duel.round, 2);
+  assert.ok(duel.players.every((player) => !player.eliminated));
 });
 
-test("a curved miss can fall while the other player remains on top", () => {
+test("a chosen curved path stops at the safe rim instead of throwing its player off", () => {
   const duel = run("0", "2*x");
-  assert.equal(duel.winner, "Blue");
-  assert.equal(duel.players[0].eliminated, false);
-  assert.equal(duel.players[1].eliminated, true);
+  assert.equal(duel.phase, "planning");
+  assert.ok(duel.players.every((player) => !player.eliminated));
+  assert.ok(duel.players.every((player) => insideDuel(player.position.x, player.position.y, duel.radius)));
 });
 
 test("more ink means more mass and changes a head-on collision", () => {
   const duel = createDuel();
-  duel.players[0].mass = 2;
-  duel.players[1].mass = 0.8;
+  const baseline = run("0", "0");
+  const square = Array.from({ length: 10240 }, (_, i) => {
+    const x = i % 128, y = Math.floor(i / 128);
+    return x >= 38 && x < 90 && y >= 20 && y < 59 ? "1" : "0";
+  }).join("");
+  setDuelBody(duel, 0, square);
+  assert.ok(duel.players[0].mass > baseline.players[0].mass);
   lockEquation(duel, 0, "0"); lockEquation(duel, 1, "0"); launchDuel(duel);
   for (let i = 0; i < 1200 && duel.phase === "running"; i++) updateDuel(duel, FIXED_STEP);
-  assert.equal(duel.winner, "Blue");
+  assert.ok(duel.lastImpact);
+  assert.notEqual(duel.players[0].position.x, baseline.players[0].position.x);
 });
 
 test("an invalid equation cannot lock or launch", () => {
@@ -59,7 +68,8 @@ test("preview stops at the same friction-limited travel distance", () => {
 
 test("heavier drawings launch slower, and each round tightens the circular boundary", () => {
   const duel = createDuel();
-  duel.players[0].mass = 2;
+  const full = "1".repeat(2048) + "0".repeat(8192);
+  setDuelBody(duel, 0, full);
   assert.equal(travelDistance(2), travelDistance(1) / 2);
   assert.ok(insideDuel(0, 7, duel.radius));
   assert.equal(insideDuel(7, 7, duel.radius), false);
@@ -70,5 +80,33 @@ test("heavier drawings launch slower, and each round tightens the circular bound
   updateDuel(duel, FIXED_STEP);
   assert.equal(duel.phase, "planning");
   assert.equal(duel.round, 2);
-  assert.equal(duel.radius, 6.2);
+  assert.ok(Math.abs(duel.radius - 7.1) < 1e-8);
+});
+
+test("mask cells determine mass, centre, inertia, and actual overlap", () => {
+  const mask = starterMask(0), body = bodyFromMask(mask);
+  assert.ok(body.mass > 0 && body.inertia > 0);
+  assert.ok(body.cx > 50 && body.cx < 78);
+  const duel = createDuel();
+  assert.equal(duel.players[0].mass, body.mass);
+  assert.equal(duel.players[0].inertia, body.inertia);
+  assert.equal(interceptSlope(duel.players[0].position, duel.players[1].position,
+    duel.players[0].mass, duel.players[1].mass, 0, duel.radius), 0);
+  assert.equal(interceptSlope(duel.players[1].position, duel.players[0].position,
+    duel.players[1].mass, duel.players[0].mass, 0, duel.radius), null);
+  const path = safeTravelPath([{ x: 0, y: 0, z: .5 }, { x: 30, y: 0, z: .5 }], 1, duel.radius);
+  assert.ok(Math.abs(path.at(-1).x - (duel.radius - .2)) < 1e-8);
+});
+
+test("suggested intercept meets a straight rival even with a vertical offset", () => {
+  const duel = createDuel();
+  duel.players[1].position.y = 2;
+  const slope = interceptSlope(duel.players[0].position, duel.players[1].position,
+    duel.players[0].mass, duel.players[1].mass, 0, duel.radius);
+  assert.ok(slope > 0);
+  lockEquation(duel, 0, `${slope.toFixed(3)}*x`);
+  lockEquation(duel, 1, "0");
+  launchDuel(duel);
+  for (let i = 0; i < 1200 && duel.phase === "running"; i++) updateDuel(duel, FIXED_STEP);
+  assert.ok(duel.lastImpact);
 });

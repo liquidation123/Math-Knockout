@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
-import { createDuel, insideDuel, travelDistance, travelPath } from "../src/duel.js";
+import { createDuel, insideDuel, interceptSlope, safeTravelPath } from "../src/duel.js";
 import { duelSocketUrl } from "../src/duel-connection.js";
 
 // Run the real client with a fake DOM/socket, without needing WebGL in Node.
@@ -21,6 +21,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   let resolveMountain, rejectMountain, socket;
   const ready = new Promise((resolve, reject) => { resolveMountain = resolve; rejectMountain = reject; });
   const errors = [], windowEvents = {};
+  const sessionStorage = { getItem: () => null, setItem() {} };
   const view = {
     ready, setViewMode() {}, removeCurve() {}, drawCurve() {}, setPlayerShape() {},
     drawPlayers() {}, updateCharacterCamera() {}, render() {},
@@ -40,7 +41,8 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     URL, location: new URL(pageUrl),
     document: { querySelector: element, querySelectorAll: () => [] }, window: { addEventListener(name, handler) { windowEvents[name] = handler; } },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
-    buildPreview, travelPath, insideDuel, travelDistance, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame() {},
+    buildPreview, safeTravelPath, insideDuel, interceptSlope, sessionStorage,
+    duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame() {},
     console: { error: (...args) => errors.push(args) },
   });
   const message = (data) => socket.emit("message", { data: JSON.stringify(data) });

@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { createDuel, launchDuel, lockEquation, updateDuel } from "./src/duel.js";
+import { createDuel, launchDuel, lockEquation, setDuelBody, updateDuel } from "./src/duel.js";
 import { takeFixedSteps } from "./src/physics.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
@@ -54,17 +54,12 @@ const sockets = new WebSocketServer({ server, maxPayload: 16000 });
 const rooms = new Map();
 const send = (socket, message) => socket?.readyState === 1 && socket.send(JSON.stringify(message));
 const inkFromMask = (mask) => (mask.match(/1/g) || []).length * 100 / 10240;
-function setShapePhysics(player, mask) {
-  const ink = Math.min(20, inkFromMask(mask));
-  player.mass = 0.8 + 0.06 * ink;
-  player.radius = 0.25 + 0.55 * Math.sqrt(ink / 20);
-}
-
 function publish(room) {
   room.clients.forEach((socket, side) => send(socket, {
     type: "state", side, players: room.duel.players, phase: room.duel.phase,
     locked: room.duel.locked, winner: room.duel.winner, startAt: room.startAt,
     room: room.id, bot: room.bot, botAt: room.botAt, round: room.duel.round, radius: room.duel.radius,
+    token: room.tokens[side],
   }));
 }
 
@@ -83,25 +78,31 @@ function resetRoom(room) {
   room.duel = createDuel();
   room.startAt = 0;
   room.masks.forEach((mask, side) => {
-    if (mask) setShapePhysics(room.duel.players[side], mask);
+    if (mask) setDuelBody(room.duel, side, mask);
   });
 }
 
 sockets.on("connection", (socket, request) => {
   const params = new URL(request.url, "http://localhost").searchParams;
   const quick = params.get("quick") === "1";
+  const resume = params.get("resume");
   const waiting = quick && [...rooms.values()].find((room) => room.quick && !room.bot && room.clients[0] && !room.clients[1]);
   const id = quick ? waiting?.id || randomUUID().slice(0, 8) : params.get("room");
   if (!/^[a-zA-Z0-9-]{4,32}$/.test(id || "")) return socket.close(1008, "Invalid room link. Return to Change mode and start a new Bump Duel.");
-  const room = rooms.get(id) || { id, quick, bot: false, clients: [null, null], masks: [null, null], duel: createDuel(), startAt: 0 };
-  if (room.bot) return socket.close(1008, "This bot match has already started.");
-  const side = room.clients.findIndex((client) => !client);
-  if (side < 0) return socket.close(1008, "This room already has two players. Close an extra tab, then retry.");
+  const room = rooms.get(id) || { id, quick, bot: false, clients: [null, null], tokens: [null, null],
+    graceTimers: [null, null], masks: [null, null], duel: createDuel(), startAt: 0 };
+  const side = resume ? room.tokens.indexOf(resume)
+    : room.clients.findIndex((client, index) => !client && !room.tokens[index] && !(room.bot && index === 1));
+  if (side < 0) return socket.close(1008, resume ? "Reconnect expired. Start a new duel." : "This room is full. Start a new duel.");
+  if (room.clients[side]) room.clients[side].close();
+  clearTimeout(room.graceTimers[side]);
+  room.tokens[side] ||= randomUUID();
   rooms.set(id, room);
   room.clients[side] = socket;
-  if (side === 0 && quick) {
+  if (side === 0 && quick && !room.bot && !room.botTimer) {
     room.botAt = Date.now() + 10000;
     room.botTimer = setTimeout(() => {
+      room.botTimer = null;
       if (room.clients[0] && !room.clients[1]) {
         room.bot = true;
         if (room.duel.locked[0]) { lockEquation(room.duel, 1, "0"); countdown(room); }
@@ -109,7 +110,7 @@ sockets.on("connection", (socket, request) => {
       }
     }, 10000);
   }
-  if (side === 1) { clearTimeout(room.botTimer); room.botAt = 0; }
+  if (side === 1) { clearTimeout(room.botTimer); room.botTimer = null; room.botAt = 0; }
   room.masks.forEach((mask, index) => { if (mask) send(socket, { type: "shape", side: index, mask }); });
   publish(room);
 
@@ -131,7 +132,7 @@ sockets.on("connection", (socket, request) => {
       if (ink > 20.5) return send(socket, { type: "error", error: "This drawing exceeds 20L." });
       if (!ink) return;
       room.masks[side] = mask;
-      setShapePhysics(room.duel.players[side], mask);
+      setDuelBody(room.duel, side, mask);
       room.clients.forEach((client) => send(client, { type: "shape", side, mask }));
       publish(room);
     } else if (message.type === "reset") {
@@ -140,15 +141,19 @@ sockets.on("connection", (socket, request) => {
     }
   });
   socket.on("close", () => {
+    if (room.clients[side] !== socket) return;
     room.clients[side] = null;
-    if (room.clients.every((client) => !client)) {
-      clearTimeout(room.countdownTimer); clearTimeout(room.botTimer); rooms.delete(id);
-    }
-    else {
+    // Keep a disconnected player's shape and turn for 15 seconds so a reload can resume.
+    room.graceTimers[side] = setTimeout(() => {
+      room.tokens[side] = null;
       room.masks[side] = null;
-      room.clients.forEach((client) => send(client, { type: "shape", side, mask: null }));
-      resetRoom(room); publish(room);
-    }
+      if (room.clients.every((client) => !client)) {
+        clearTimeout(room.countdownTimer); clearTimeout(room.botTimer); rooms.delete(id);
+      } else {
+        room.clients.forEach((client) => send(client, { type: "shape", side, mask: null }));
+        resetRoom(room); publish(room);
+      }
+    }, 15000);
   });
 });
 
@@ -159,7 +164,15 @@ setInterval(() => {
   const dt = (now - previous) / 1000;
   previous = now;
   takeFixedSteps(clock, dt, (step) => {
-    rooms.forEach((room) => updateDuel(room.duel, step));
+    rooms.forEach((room) => {
+      const before = room.duel.phase;
+      updateDuel(room.duel, step);
+      if (before === "running" && room.duel.phase === "finished") {
+        room.duel.replay.push(room.duel.players.map((p) => ({ position: { ...p.position }, velocity: { ...p.velocity }, angle: p.angle,
+          eliminated: p.eliminated, team: p.team })));
+        room.clients.forEach((client) => send(client, { type: "replay", frames: room.duel.replay }));
+      }
+    });
   });
   rooms.forEach(publish);
 }, 50);

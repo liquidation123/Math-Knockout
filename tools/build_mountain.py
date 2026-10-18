@@ -39,7 +39,7 @@ rock_texture.image = bpy.data.images.load(str(OUT / "limestone.jpg"))
 rock.node_tree.links.new(rock_texture.outputs["Color"],
                          rock.node_tree.nodes.get("Principled BSDF").inputs["Base Color"])
 stone = [material(f"Ruined stone {i}", c) for i, c in enumerate([
-    (.78, .70, .54), (.88, .80, .64), (.68, .67, .58),
+    (.68, .61, .48), (.80, .71, .55), (.62, .59, .51),
 ])]
 leaf = [material(f"Foliage {i}", c) for i, c in enumerate([
     (.16, .39, .08), (.24, .52, .09), (.40, .66, .11), (.20, .47, .14),
@@ -94,21 +94,21 @@ for polygon in top.data.polygons:
         x, y, _ = top.data.vertices[top.data.loops[loop].vertex_index].co
         uv.data[loop].uv = ((x + 14) / 28, (y + 8) / 16)
 
-# Sculpted ledges and buttresses break up the old cone silhouette.
-profile = [(1, 0), (1.015, -.6), (1.03, -1.2), (1.045, -2),
-           (1.06, -3.3), (1.08, -4.7), (1.10, -6.1), (1.13, -7.6),
-           (1.16, -9.3), (1.19, -11), (1.22, -12.8), (1.26, -14.6),
-           (1.31, -16.3), (1.37, -18), (1.42, -20), (1.47, -22),
-           (1.49, -25), (1.45, -28), (1.36, -31), (1.22, -34),
-           (1.0, -37)]
+# A broad sloping mountain replaces the almost vertical cylinder. The lip still
+# matches the unchanged gameplay top; ledges and buttresses widen below it.
+profile = [(1, 0), (1.01, -.5), (1.04, -1.2), (1.07, -2),
+           (1.12, -3.2), (1.17, -4.3), (1.23, -5.7), (1.31, -7),
+           (1.28, -7.8), (1.37, -8.7), (1.42, -10), (1.49, -11.7),
+           (1.56, -13.5), (1.64, -15.7), (1.72, -18), (1.82, -20.5),
+           (1.94, -23)]
 verts, faces, choices = [], [], []
 for level, (scale, height) in enumerate(profile):
     for i in range(N):
         # Coherent ridges continue down the cliff instead of changing randomly per face.
-        ridge = math.sin(i * .18) * .12 + math.sin(i * .49 + .7) * .05
-        buttress = max(0, math.sin(i * .29 + .6)) ** 8 * .24
-        ledge = .065 if level in (3, 7, 11) else 0
-        chip = math.sin(i * 1.51 + level * 1.3) * .025
+        ridge = math.sin(i * .18) * .13 + math.sin(i * .49 + .7) * .08
+        buttress = max(0, math.sin(i * .29 + .6)) ** 8 * .3
+        ledge = .09 if level in (4, 8, 12) else 0
+        chip = math.sin(i * 1.51 + level * 1.3) * .04
         flare = 0 if level == 0 else (ridge + buttress + ledge + chip) * level / len(profile)
         verts.append(point(i / N, scale + flare,
                            height + (0 if level == 0 else math.sin(i*.33+level)*.20)))
@@ -149,16 +149,27 @@ for i in range(76):
     block((x, y, .13), (random.uniform(.7, 1.2), random.uniform(.45, .8),
                         random.uniform(.24, .4)), i % len(stone),
           math.atan2(y/8, x/14) + math.pi/2)
-# Four readable, weathered towers on the far arc; shorter broken posts at the front.
-for t, courses in [(.12, 8), (.20, 4), (.30, 3), (.39, 8),
-                   (.58, 3), (.67, 3), (.81, 3), (.91, 3)]:
+# Weathered, tapered masonry columns replace stacks of identical cubes.
+for t, height in [(.12, 4.0), (.20, 1.8), (.30, 1.5), (.39, 4.2),
+                  (.58, 1.5), (.67, 1.6), (.81, 1.7), (.91, 1.6)]:
     x, y, _ = point(t, 1.035)
-    for layer in range(courses):
-        for side in range(4):
-            dx, dy = ((-.46,-.46), (.46,-.46), (-.46,.46), (.46,.46))[side]
-            jitter = random.uniform(-.035, .035)
-            block((x+dx+jitter, y+dy, .36+layer*.48),
-                  (.88, .88, .46), (layer+side) % len(stone))
+    start = len(verts)
+    for ring, (z, radius) in enumerate([(0, .82), (.35, .86), (.49, .78),
+                                        (height*.48, .69), (height*.78, .65), (height, .72)]):
+        for side in range(12):
+            angle = side * math.tau / 12
+            wobble = 1 + .08 * math.sin(side*2.4+t*31+ring*.6)
+            broken = .16 * math.sin(side*1.9+t*19) if ring == 5 else 0
+            verts.append((x + math.cos(angle)*radius*wobble,
+                          y + math.sin(angle)*radius*wobble, z + broken))
+    for ring in range(5):
+        for side in range(12):
+            a = start + ring*12 + side
+            b = start + ring*12 + (side+1)%12
+            faces.append((a, b, b+12, a+12))
+            choices.append((side//3 + ring) % len(stone))
+    faces.append(tuple(start+60+side for side in range(12)))
+    choices.append(1)
 ruins = mesh("Broken stone ring and ruins", verts, faces, stone, choices)
 bevel = ruins.modifiers.new("Soft weathered edges", 'BEVEL')
 bevel.width = .045

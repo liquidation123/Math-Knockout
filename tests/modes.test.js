@@ -138,14 +138,15 @@ test("Bump Duel keeps contact knockback without projectile damage and stops at s
   duel.players[1].position = { x: 4, y: -3, z: 0.5 };
   lockEquation(duel, 0, "0"); lockEquation(duel, 1, "0"); launchDuel(duel);
   for (let tick = 0; tick < 180; tick += 1) updateDuel(duel, FIXED_STEP);
-  assert.ok(Math.abs(duel.players[0].position.x + 2.4) < 1e-8);
+  assert.ok(Math.abs(duel.players[0].position.x - (-1.9 - duel.players[0].radius)) < 1e-8);
   assert.equal(duel.paths[0].done, true);
   assert.ok(duel.players.every((player) => player.health === 100));
   const collision = createDuel();
   lockEquation(collision, 0, "0"); lockEquation(collision, 1, "0"); launchDuel(collision);
   for (let tick = 0; tick < 1200 && collision.phase === "running"; tick += 1) updateDuel(collision, FIXED_STEP);
-  assert.equal(collision.phase, "finished");
-  assert.ok(collision.players.every((player) => player.health === 100 && player.eliminated));
+  assert.equal(collision.phase, "planning");
+  assert.ok(collision.lastImpact);
+  assert.ok(collision.players.every((player) => player.health === 100 && !player.eliminated));
   assert.equal("attack" in collision, false);
 });
 

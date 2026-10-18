@@ -52,7 +52,7 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   const extra = connect();
   const [closeCode, closeReason] = await once(extra.socket, "close");
   assert.equal(closeCode, 1008);
-  assert.match(closeReason.toString(), /two players/);
+  assert.match(closeReason.toString(), /room is full/);
   assert.equal(extra.state, null, "A full room must never assign a fake side.");
   const initialPositions = blue.state.players.map((player) => player.position);
   const lockBoth = () => [blue, red].forEach((client) => client.socket.send(JSON.stringify({ type: "lock", expression: "0" })));
@@ -82,16 +82,21 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   assert.ok(Math.abs(blue.state.players[1].mass - (0.8 + 0.06 * 100 * 100 / 10240)) < 1e-6);
   red.socket.close();
   await once(red.socket, "close");
-  await waitUntil(() => blue.shapes.some((message) => message.side === 1 && message.mask === null));
+  const resumed = connect("room=integration-test&resume=" + red.state.token);
+  await waitUntil(() => resumed.state?.side === 1);
+  assert.equal(resumed.state.players[1].mass, red.state.players[1].mass);
+  assert.ok(resumed.shapes.some((message) => message.side === 1 && message.mask === mask));
   blue.socket.close();
   await once(blue.socket, "close");
-  const fresh = connect();
+  resumed.socket.close();
+  await once(resumed.socket, "close");
+  const fresh = connect("room=fresh-test");
   await waitUntil(() => fresh.state);
   assert.equal(fresh.state.side, 0);
   assert.equal(fresh.state.phase, "planning");
   assert.deepEqual(fresh.state.locked, [false, false]);
   assert.deepEqual(fresh.state.players.map((player) => player.position), initialPositions);
-  assert.ok(fresh.state.players.every((player) => player.health === 100 && player.mass === 1));
+  assert.ok(fresh.state.players.every((player) => player.health === 100 && player.mass > 1 && player.inertia > 0));
   fresh.socket.close();
   await once(fresh.socket, "close");
 
@@ -105,7 +110,14 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   const solo = connect("quick=1");
   await waitUntil(() => solo.state?.bot, 12000);
   assert.equal(solo.state.side, 0);
-  solo.socket.send(JSON.stringify({ type: "lock", expression: "x/2" }));
+  // A tiny drawing loses a straight collision to the heavier starter bot.
+  const tiny = Array.from({ length: 10240 }, (_, i) => {
+    const x = i % 128, y = Math.floor(i / 128);
+    return x >= 44 && x < 84 && y >= 38 && y < 43 ? "1" : "0";
+  }).join("");
+  solo.socket.send(JSON.stringify({ type: "shape", mask: tiny }));
+  await waitUntil(() => solo.state.players[0].mass < 1);
+  solo.socket.send(JSON.stringify({ type: "lock", expression: "0" }));
   await waitUntil(() => solo.state?.phase === "finished", 12000);
   assert.ok(["Blue", "Red", "Draw"].includes(solo.state.winner));
 });

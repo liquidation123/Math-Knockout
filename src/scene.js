@@ -6,6 +6,8 @@ import { PROJECTILE_RADIUS } from "./projectile.js";
 import { buildCartesianGrid, coordinateText } from "./grid.js";
 import { effectKind, pathLookAhead } from "./cinematic.js";
 import { createViewGizmo } from "./view-gizmo.js";
+import { bodyFromMask, starterMask } from "./body.js";
+import { createBodyMesh } from "./body-mesh.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -41,31 +43,6 @@ export function frameCamera(camera, aspect, topInset = 0, bottomInset = 0) {
   camera.top = shift + halfHeight;
   camera.bottom = shift - halfHeight;
   camera.updateProjectionMatrix();
-}
-
-function starterMask(index, mode) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128; canvas.height = 80;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "white";
-  const red = index >= (mode === "bump" ? 1 : 3);
-  // Simple, distinct silhouettes for players who have not drawn a character.
-  ctx.fillRect(48, 26, 32, 30);
-  ctx.fillRect(42, 32, 7, 17); ctx.fillRect(79, 32, 7, 17);
-  ctx.fillRect(51, 55, 9, 18); ctx.fillRect(68, 55, 9, 18);
-  if (red) {
-    ctx.beginPath();
-    ctx.moveTo(48, 29); ctx.lineTo(42, 5); ctx.lineTo(60, 20);
-    ctx.lineTo(68, 20); ctx.lineTo(86, 5); ctx.lineTo(80, 29);
-    ctx.closePath(); ctx.fill();
-    ctx.fillRect(48, 22, 32, 15);
-  } else {
-    ctx.fillRect(49, 12, 30, 19);
-    ctx.fillRect(57, 4, 14, 9);
-    ctx.fillRect(54, 29, 6, 7); ctx.fillRect(68, 29, 6, 7);
-  }
-  const pixels = ctx.getImageData(0, 0, 128, 80).data;
-  return Array.from({ length: 10240 }, (_, i) => pixels[i * 4 + 3] ? "1" : "0").join("");
 }
 
 export function createView(container, hud, controls, mode = "projectile") {
@@ -276,6 +253,7 @@ export function createView(container, hud, controls, mode = "projectile") {
       if (!mesh.userData.ready || mesh.position.distanceTo(target) > 4) mesh.position.copy(target);
       else mesh.position.lerp(target, 0.35); // Smooth 20 Hz snapshots for display only.
       mesh.userData.ready = true;
+      if (mode === "bump") mesh.rotation.z = player.angle || 0;
       mesh.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
       if (mesh.userData.drawing) {
         mesh.userData.drawing.scale.setScalar(index === selectedIndex ? 1.12 : 1);
@@ -296,7 +274,15 @@ export function createView(container, hud, controls, mode = "projectile") {
       });
       mesh.userData.drawing = null;
     }
-    mask = mask?.includes("1") ? mask : starterMask(index, mode);
+    mask = mask?.includes("1") ? mask : starterMask(index >= (mode === "bump" ? 1 : 3) ? 1 : 0);
+    if (mode === "bump") {
+      const color = index === 0 ? 0x2889ff : 0xff6b86;
+      const drawing = createBodyMesh(bodyFromMask(mask), color);
+      mesh.add(drawing);
+      mesh.userData.drawing = drawing;
+      mesh.material.visible = false;
+      return;
+    }
     const occupied = [];
     for (let i = 0; i < mask.length; i++) if (mask[i] === "1") occupied.push(i);
     const left = Math.max(0, Math.min(...occupied.map((i) => i % 128)) - 4);
@@ -547,7 +533,7 @@ export function createView(container, hud, controls, mode = "projectile") {
           while (next <= length) {
             positions.push(new THREE.Vector3(a.x + (b.x - a.x) * next / length,
               a.y + (b.y - a.y) * next / length, .25));
-            next += .7;
+            next += .9;
           }
           next -= length;
         }
@@ -555,7 +541,7 @@ export function createView(container, hud, controls, mode = "projectile") {
       const geometry = new THREE.BufferGeometry().setFromPoints(positions);
       geometry.setDrawRange(0, 0);
       const dots = new THREE.Points(geometry,
-        new THREE.PointsMaterial({ color, map: dotTexture, size: 14, sizeAttenuation: false,
+        new THREE.PointsMaterial({ color, map: dotTexture, size: 11, sizeAttenuation: false,
           transparent: true, alphaTest: .1, depthTest: false, depthWrite: false }));
       dots.userData.total = positions.length;
       dots.frustumCulled = false;
@@ -672,6 +658,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     render: () => {
       playerMeshes.forEach((mesh) => {
         if (!mesh.userData.drawing) return;
+        if (mode === "bump") return;
         mesh.userData.drawing.quaternion.copy(activeCamera.quaternion);
         mesh.userData.drawing.rotateZ(mesh.userData.tilt || 0);
       });
