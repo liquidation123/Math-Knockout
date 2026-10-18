@@ -77,8 +77,9 @@ test('canvas tools, ink cap, undo, clear, lock, and saved character', async () =
     setInterval: globalThis.setInterval, clearInterval: globalThis.clearInterval, now: Date.now };
   let now = 0, tick, saved;
   try {
-    globalThis.document = { querySelector: selector => nodes[selector], querySelectorAll: () => buttons };
-    globalThis.window = {};
+    globalThis.document = { querySelector: selector => nodes[selector], querySelectorAll: () => buttons,
+      addEventListener(name, fn) { this[`on${name}`] = fn; } };
+    globalThis.window = { location: { assign(url) { this.destination = url; } } };
     globalThis.sessionStorage = { setItem(key, value) { saved = { key, value }; } };
     globalThis.setInterval = fn => { tick = fn; return 1; };
     globalThis.clearInterval = () => {};
@@ -120,6 +121,8 @@ test('canvas tools, ink cap, undo, clear, lock, and saved character', async () =
     assert.ok(JSON.parse(saved.value).inkUsed > 0);
     canvas.fire('pointerdown', pointer(150, 150));
     assert.deepEqual(pixels, beforeFill);
+    document.onkeydown({ key: 'Enter', repeat: false, target: canvas, preventDefault() {} });
+    assert.equal(window.location.destination, '/play.html');
   } finally {
     globalThis.document = original.document;
     globalThis.window = original.window;

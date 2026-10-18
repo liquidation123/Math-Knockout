@@ -78,6 +78,8 @@ test("mode pages load; Bump restart cancels old countdowns and an empty room sta
   await waitUntil(() => blue.state.phase === "planning");
   red.socket.send(JSON.stringify({ type: "shape", mask }));
   await waitUntil(() => blue.shapes.some((message) => message.side === 1 && message.mask === mask));
+  await waitUntil(() => blue.state.players[1].mass !== 1);
+  assert.ok(Math.abs(blue.state.players[1].mass - (0.8 + 0.06 * 100 * 100 / 10240)) < 1e-6);
   red.socket.close();
   await once(red.socket, "close");
   await waitUntil(() => blue.shapes.some((message) => message.side === 1 && message.mask === null));

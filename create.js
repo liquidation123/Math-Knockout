@@ -208,5 +208,11 @@ if (typeof document !== 'undefined') {
     updateInk();
     say('Canvas cleared. Your ink is back.');
   });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.repeat || event.target.closest?.('a')) return;
+    event.preventDefault();
+    lock();
+    window.location.assign(arena.href);
+  });
   updateInk();
 }

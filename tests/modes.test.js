@@ -47,15 +47,15 @@ test("shared mountain uses the branch asset, lighting, and exact stone collision
   assert.ok(scene.children.some((object) => object.isHemisphereLight && object.intensity === 1.5));
   assert.ok(scene.children.some((object) => object.isDirectionalLight && object.intensity === 2.3));
   const stones = scene.children.find((object) => object.isInstancedMesh);
-  assert.equal(stones.count, OBSTACLES.length * 6);
+  assert.equal(stones.count, OBSTACLES.length * 12);
   const matrix = new THREE.Matrix4(), center = new THREE.Vector3();
   OBSTACLES.forEach((box, index) => {
     center.set(0, 0, 0);
-    for (let piece = 0; piece < 6; piece++) {
-      stones.getMatrixAt(index * 6 + piece, matrix);
+    for (let piece = 0; piece < 12; piece++) {
+      stones.getMatrixAt(index * 12 + piece, matrix);
       center.add(new THREE.Vector3().setFromMatrixPosition(matrix));
     }
-    center.divideScalar(6);
+    center.divideScalar(12);
     assert.ok(center.distanceTo(new THREE.Vector3(box.x, box.y, box.height / 2)) < 1e-6);
   });
 });

@@ -33,12 +33,13 @@ texture = painted.node_tree.nodes.new("ShaderNodeTexImage")
 texture.image = bpy.data.images.load(str(OUT / "grass-painted.jpg"))
 painted.node_tree.links.new(texture.outputs["Color"],
                             painted.node_tree.nodes.get("Principled BSDF").inputs["Base Color"])
-rock = [material(f"Sunlit limestone {i}", c) for i, c in enumerate([
-    (.72, .59, .40), (.81, .69, .49), (.91, .79, .59),
-    (.95, .85, .66), (.64, .59, .47), (.86, .73, .51),
-])]
+rock = material("Textured limestone", (1, 1, 1))
+rock_texture = rock.node_tree.nodes.new("ShaderNodeTexImage")
+rock_texture.image = bpy.data.images.load(str(OUT / "limestone.jpg"))
+rock.node_tree.links.new(rock_texture.outputs["Color"],
+                         rock.node_tree.nodes.get("Principled BSDF").inputs["Base Color"])
 stone = [material(f"Ruined stone {i}", c) for i, c in enumerate([
-    (.63, .48, .31), (.74, .59, .39), (.53, .47, .36),
+    (.78, .70, .54), (.88, .80, .64), (.68, .67, .58),
 ])]
 leaf = [material(f"Foliage {i}", c) for i, c in enumerate([
     (.16, .39, .08), (.24, .52, .09), (.40, .66, .11), (.20, .47, .14),
@@ -96,18 +97,22 @@ for polygon in top.data.polygons:
         x, y, _ = top.data.vertices[top.data.loops[loop].vertex_index].co
         uv.data[loop].uv = ((x + 14) / 28, (y + 8) / 16)
 
-# Broad cliff bands, with irregular strata and an expanding base below the clouds.
+# Sculpted ledges and buttresses break up the old cone silhouette.
 profile = [(1, 0), (1.015, -.6), (1.03, -1.2), (1.045, -2),
-           (1.075, -3.3), (1.11, -4.7), (1.16, -6.1), (1.22, -7.6),
-           (1.28, -9.3), (1.35, -11), (1.42, -12.8), (1.50, -14.6),
-           (1.58, -16.3), (1.68, -18), (1.78, -19.8), (1.88, -21.5)]
+           (1.06, -3.3), (1.08, -4.7), (1.10, -6.1), (1.13, -7.6),
+           (1.16, -9.3), (1.19, -11), (1.22, -12.8), (1.26, -14.6),
+           (1.31, -16.3), (1.37, -18), (1.42, -20), (1.47, -22),
+           (1.49, -25), (1.45, -28), (1.36, -31), (1.22, -34),
+           (1.0, -37)]
 verts, faces, choices = [], [], []
 for level, (scale, height) in enumerate(profile):
     for i in range(N):
         # Coherent ridges continue down the cliff instead of changing randomly per face.
-        ridge = math.sin(i * .18) * .25 + math.sin(i * .49 + .7) * .12
-        chip = math.sin(i * 1.51 + level * 1.3) * .045
-        flare = 0 if level == 0 else (ridge + chip) * level / len(profile)
+        ridge = math.sin(i * .18) * .12 + math.sin(i * .49 + .7) * .05
+        buttress = max(0, math.sin(i * .29 + .6)) ** 8 * .24
+        ledge = .065 if level in (3, 7, 11) else 0
+        chip = math.sin(i * 1.51 + level * 1.3) * .025
+        flare = 0 if level == 0 else (ridge + buttress + ledge + chip) * level / len(profile)
         verts.append(point(i / N, scale + flare,
                            height + (0 if level == 0 else math.sin(i*.33+level)*.20)))
 for level in range(len(profile)-1):
@@ -115,9 +120,16 @@ for level in range(len(profile)-1):
         j = (i + 1) % N
         a, b, c, d = level*N+i, level*N+j, (level+1)*N+i, (level+1)*N+j
         faces.extend([(a, c, b), (b, c, d)])
-        shade = (i // 5 + level // 3 + (1 if math.sin(i*.22) > .5 else 0)) % len(rock)
-        choices.extend([shade, shade])
-cliff = mesh("Sculpted limestone cliff", verts, faces, rock, choices)
+        choices.extend([0, 0])
+cliff = mesh("Sculpted limestone cliff", verts, faces, [rock], choices)
+uv = cliff.data.uv_layers.new()
+for face in cliff.data.polygons:
+    seam = any(cliff.data.loops[loop].vertex_index % N == N-1 for loop in face.loop_indices)
+    for loop in face.loop_indices:
+        index = cliff.data.loops[loop].vertex_index
+        level, side = divmod(index, N)
+        uv.data[loop].uv = ((N if seam and side == 0 else side) / N * 4,
+                            level / (len(profile)-1) * 2)
 for polygon in cliff.data.polygons: polygon.use_smooth = True
 
 # Small stone slabs and taller broken ruins follow the outer rim, leaving combat clear.
@@ -158,17 +170,17 @@ ruins.modifiers.new("Corner normals", 'WEIGHTED_NORMAL')
 
 # The painted meadow is a color base; thousands of bent 3D blades make its depth real.
 verts, faces, choices = [], [], []
-for i in range(3600):
+for i in range(5200):
     x, y = random.uniform(-13.7, 13.7), random.uniform(-7.7, 7.7)
     edge = abs(x/14)**POWER + abs(y/8)**POWER
     if edge > .94:
         continue
     # Three crossed leaves per tuft, with a bent tip and two triangles per leaf.
-    height = random.uniform(.05, .13) if edge < .65 else random.uniform(.12, .27)
+    height = random.uniform(.05, .16) if edge < .65 else random.uniform(.12, .29)
     for leaf_index in range(3):
         angle = random.random() * math.tau
         dx, dy = math.cos(angle), math.sin(angle)
-        width = random.uniform(.035, .07)
+        width = random.uniform(.018, .042)
         bend = height * random.uniform(.24, .48)
         base = len(verts)
         verts.extend([(x-dy*width, y+dx*width, .025),
@@ -211,27 +223,27 @@ for i in range(300):
     start = len(verts)
     # A two-ring canopy reads as rounded foliage, with far fewer faces than a sphere.
     for ring, radius, height in [(0, .9, -.25), (1, 1, .28), (2, .48, .9)]:
-        for side in range(8):
-            a = side * math.tau / 8
+        for side in range(12):
+            a = side * math.tau / 12
             wobble = 1 + .1 * math.sin(side * 2.7 + i)
             verts.append((x + math.cos(a) * size * radius * wobble,
                           y + math.sin(a) * size * radius * wobble,
                           z + height * size))
     verts.append((x, y, z + size))
     for ring in range(2):
-        for side in range(8):
-            next_side = (side + 1) % 8
-            faces.extend([(start + ring*8+side, start + ring*8+next_side,
-                           start + (ring+1)*8+side),
-                          (start + ring*8+next_side, start + (ring+1)*8+next_side,
-                           start + (ring+1)*8+side)])
+        for side in range(12):
+            next_side = (side + 1) % 12
+            faces.extend([(start + ring*12+side, start + ring*12+next_side,
+                           start + (ring+1)*12+side),
+                          (start + ring*12+next_side, start + (ring+1)*12+next_side,
+                           start + (ring+1)*12+side)])
             choices.extend([(i + side // 3) % len(leaf)] * 2)
-    for side in range(8):
-        faces.append((start+16+side, start+16+(side+1)%8, start+24))
+    for side in range(12):
+        faces.append((start+24+side, start+24+(side+1)%12, start+36))
         choices.append((i+side//3) % len(leaf))
 mesh("Foliage on cliff", verts, faces, leaf, choices)
 
-# Smooth, overlapping spheres form real cloud volume from every viewing angle.
+# Cloud puffs taper toward the sides and rise above a flatter shaded base.
 bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3)
 sphere = bpy.context.object
 sphere_vertices = [tuple(vertex.co) for vertex in sphere.data.vertices]
@@ -239,13 +251,16 @@ sphere_faces = [tuple(p.vertices) for p in sphere.data.polygons]
 bpy.data.objects.remove(sphere, do_unlink=True)
 verts, faces, choices = [], [], []
 for side in (-1, 1):
-    for bank in range(6):
-        cx = side * (20 + bank % 3 * 3)
-        cy = 22 + bank // 3 * 4
-        cz = -4 + (bank % 4) * 1.2
-        for _ in range(13):
-            x, y, z = cx + random.uniform(-2, 2), cy + random.uniform(-2, 2), cz + random.uniform(-.6, .6)
-            radius = random.uniform(1.8, 2.9)
+    for bank in range(4):
+        cx = side * (24 + bank % 2 * 5)
+        cy = 20 + bank // 2 * 8
+        cz = -23 + bank % 2 * 1.5
+        for puff_index in range(19):
+            spread = random.uniform(-1, 1)
+            x = cx + spread * 3.4
+            y = cy + random.uniform(-2.5, 2.5)
+            z = cz + (1 - abs(spread)) * random.uniform(.4, 2.3) + random.uniform(-.4, .4)
+            radius = random.uniform(1.3, 2.6) * (1 - abs(spread) * .25)
             start = len(verts)
             phase = random.random() * math.tau
             for vx, vy, vz in sphere_vertices:
@@ -253,7 +268,7 @@ for side in (-1, 1):
                 verts.append((x+vx*radius*puff, y+vy*radius*.85*puff,
                               z+vz*radius*.65*puff))
             faces.extend(tuple(start+index for index in face) for face in sphere_faces)
-            choices.extend([random.choices(range(3), weights=[4, 6, 2])[0]] * len(sphere_faces))
+            choices.extend([2 if puff_index % 7 == 0 else (puff_index + bank) % 2] * len(sphere_faces))
 clouds = mesh("Volumetric cloud banks", verts, faces, cloud, choices)
 for polygon in clouds.data.polygons: polygon.use_smooth = True
 
@@ -307,6 +322,6 @@ for obj in bpy.context.scene.objects:
     if obj.type == 'MESH': obj.select_set(True)
 bpy.ops.export_scene.gltf(filepath=str(OUT / "mountain.glb"), export_format='GLB',
                           use_selection=True, export_image_format='WEBP',
-                          export_image_quality=52, export_meshopt_compression_enable=True)
+                          export_image_quality=70, export_meshopt_compression_enable=True)
 bpy.ops.render.render(write_still=True)
 print("Mountain exported:", OUT / "mountain.glb")

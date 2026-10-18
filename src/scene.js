@@ -5,6 +5,7 @@ import { clipCurveSections } from "./terrain.js";
 import { PROJECTILE_RADIUS } from "./projectile.js";
 import { buildCartesianGrid, coordinateText } from "./grid.js";
 import { effectKind, pathLookAhead } from "./cinematic.js";
+import { createViewGizmo } from "./view-gizmo.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -104,8 +105,11 @@ export function createView(container, hud, controls, mode = "projectile") {
   renderer.domElement.tabIndex = 0;
   renderer.domElement.setAttribute("aria-label", "Select a character in the combat arena");
   container.prepend(renderer.domElement);
+  const gizmo = createViewGizmo(container, renderer.domElement, () => activeCamera,
+    (camera) => { activeCamera = camera || overviewCamera(); });
   renderer.domElement.addEventListener("click", () => {
-    if (mode === "bump" && viewMode === "character") renderer.domElement.requestPointerLock?.();
+    if (mode === "bump" && viewMode === "character" && activeCamera === characterCamera)
+      renderer.domElement.requestPointerLock?.();
   });
   document.addEventListener("mousemove", (event) => {
     if (mode !== "bump" || document.pointerLockElement !== renderer.domElement) return;
@@ -350,6 +354,7 @@ export function createView(container, hud, controls, mode = "projectile") {
 
   function beginProjectilePOV(attack) {
     if (!attack) return;
+    gizmo.exit();
     cinematicAttack = attack;
     cinematicMode = "projectile";
     cinematicTimer = 0;
@@ -554,6 +559,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     povCamera.aspect = aspect;
     povCamera.updateProjectionMatrix();
     renderer.setSize(width, height);
+    gizmo.resize(aspect);
   }
 
   const observer = new ResizeObserver(resize);
@@ -561,6 +567,7 @@ export function createView(container, hud, controls, mode = "projectile") {
   resize();
 
   function setViewMode(mode) {
+    gizmo.exit();
     if (mode === "follow" && viewMode !== "follow") followCamera.position.copy(characterCamera.position);
     viewMode = mode;
     if (mode === "character") lookAtIndex = -1;
@@ -613,12 +620,15 @@ export function createView(container, hud, controls, mode = "projectile") {
     createImpact,
     updateEffects,
     render: () => {
+      // Painted distant sky is a backdrop; hide its flat cards during free orbit.
+      scene.userData.atmosphere?.forEach((card) => { card.visible = activeCamera !== gizmo.camera; });
       playerMeshes.forEach((mesh) => {
         if (!mesh.userData.drawing) return;
         mesh.userData.drawing.quaternion.copy(activeCamera.quaternion);
         mesh.userData.drawing.rotateZ(mesh.userData.tilt || 0);
       });
       renderer.render(scene, activeCamera);
+      gizmo.update(activeCamera);
     },
   };
 }

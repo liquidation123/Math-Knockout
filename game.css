@@ -7,7 +7,7 @@
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 main { position: relative; width: 100%; height: 100dvh; }
-#arena { position: absolute; inset: 0; }
+#arena { position: absolute; inset: 0; background: linear-gradient(#398dd3, #aee0f1); }
 canvas { display: block; width: 100%; height: 100%; }
 .panel {
   position: absolute; z-index: 1; left: 12px; right: 12px;

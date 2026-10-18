@@ -11,7 +11,7 @@ await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 for (const file of [
   "index.html", "create.html", "play.html", "bump.html", "victory.html",
-  "style.css", "create.css", "game.css", "duel.css", "victory.css", "create.js", "src",
+  "style.css", "create.css", "game.css", "duel.css", "victory.css", "view-gizmo.css", "create.js", "src",
 ]) {
   await cp(new URL(file, root), new URL(file, output), { recursive: true });
 }
@@ -31,6 +31,7 @@ for (const [source, destination] of [
   ["three/examples/jsm/libs/meshopt_decoder.module.js", "three/addons/libs/meshopt_decoder.module.js"],
   ["three/examples/jsm/utils/BufferGeometryUtils.js", "three/addons/utils/BufferGeometryUtils.js"],
   ["three/examples/jsm/utils/SkeletonUtils.js", "three/addons/utils/SkeletonUtils.js"],
+  ["three/examples/jsm/geometries/RoundedBoxGeometry.js", "three/addons/geometries/RoundedBoxGeometry.js"],
   ["math-expression-evaluator/dist/browser/math-expression-evaluator.min.js", "math-expression-evaluator/math-expression-evaluator.min.js"],
   ["math-expression-evaluator/LICENSE", "math-expression-evaluator/LICENSE"],
 ]) {

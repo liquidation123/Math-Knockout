@@ -1,0 +1,14 @@
+.view-gizmo { position: absolute; top: 18px; right: 20px; z-index: 8; display: grid; justify-items: center; gap: 7px; color: white; user-select: none; }
+.gizmo-axes { position: relative; width: 84px; height: 84px; border: 1px solid #ffffff5c; border-radius: 50%; background: #102f4f54; backdrop-filter: blur(7px); box-shadow: 0 4px 15px #0c34554d; }
+.gizmo-axes i { position: absolute; top: 50%; left: 50%; width: 7px; height: 7px; border-radius: 50%; background: white; transform: translate(-50%, -50%); }
+.gizmo-axes span { position: absolute; top: 50%; left: 50%; height: 2px; transform-origin: left center; background: currentColor; opacity: .8; }
+.gizmo-axes [data-stem=x] { color: #eb8988; }
+.gizmo-axes [data-stem=y] { color: #a4d69a; }
+.gizmo-axes [data-stem=z] { color: #85b9e8; }
+.gizmo-axes button { position: absolute; display: grid; place-items: center; width: 23px; height: 23px; padding: 0; border: 1px solid #ffffffb9; border-radius: 50%; color: white; font: 900 12px system-ui, sans-serif; transform: translate(-50%, -50%); cursor: pointer; box-shadow: 0 2px 5px #001c3980; }
+.gizmo-axes [data-axis=x] { background: #d96362; }
+.gizmo-axes [data-axis=y] { background: #64a95b; }
+.gizmo-axes [data-axis=z] { background: #488dcf; }
+.inspect-toggle { padding: 6px 10px; border: 1px solid #ffffffa8; border-radius: 14px; background: #102f4fa8; color: white; font: 700 11px system-ui, sans-serif; cursor: pointer; backdrop-filter: blur(7px); }
+.view-gizmo button:hover, .view-gizmo button:focus-visible { filter: brightness(1.2); outline: 2px solid white; outline-offset: 2px; }
+@media (max-width: 700px) { .view-gizmo { top: 10px; right: 10px; transform: scale(.8); transform-origin: top right; } }
