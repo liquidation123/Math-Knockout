@@ -17,6 +17,7 @@ let startupFailed = false, leaving = false;
 let socket;
 let state, previewLine, preview, lastKey = "", summitView = false, previewStarted = 0, lastCount = 0;
 let replayFrames = null, replayStarted = 0;
+let pathWasLocked = false;
 const localPage = ["localhost", "127.0.0.1", "[::1]"].includes(room.hostname);
 const solo = !localPage && !BUMP_SERVER_URL;
 let duel, soloStartAt = 0, previous = 0;
@@ -135,6 +136,10 @@ function updateScreen() {
 function receiveState(message) {
   const oldPhase = state?.phase;
   state = message;
+  if (!pathWasLocked && state.locked[state.side]) {
+    window.posthog?.capture("bump_path_locked", { opponent_type: state.bot || solo ? "ai" : "human" });
+  }
+  pathWasLocked = state.locked[state.side];
   if (state.token && state.room) sessionStorage.setItem("duel:" + state.room, state.token);
   if (room.searchParams.get("quick") === "1" && state.room) {
     room.searchParams.delete("quick"); room.searchParams.set("room", state.room);
@@ -143,6 +148,13 @@ function receiveState(message) {
   view.setDuelRound?.(state.round, state.radius);
   updateLoading();
   if (oldPhase !== "finished" && state.phase === "finished") {
+    const localTeam = state.side === 0 ? "Blue" : "Red";
+    const properties = {
+      opponent_type: state.bot || solo ? "ai" : "human",
+      outcome: state.winner === "Draw" ? "draw" : state.winner === localTeam ? "win" : "loss",
+    };
+    window.posthog?.capture("bump_duel_completed", properties);
+    window.posthog?.logger?.info("bump duel completed", { event: "bump_duel_completed", ...properties });
     summitView = true;
     view.setViewMode("summit");
     $("#view").textContent = "First person";
@@ -239,6 +251,7 @@ $("#again").addEventListener("click", restart);
 $("#invite").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(location.href);
+    window.posthog?.capture("bump_invite_copied", { opponent_type: "human" });
     $("#invite").textContent = "Link copied ✓";
     setTimeout(() => $("#invite").textContent = "Invite friend ↗", 1600);
   } catch { $("#error").textContent = "Copy failed. Share the URL in your address bar."; }

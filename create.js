@@ -100,6 +100,15 @@ if (typeof document !== 'undefined') {
       alpha: alphaChannel(snapshot().data), width: WIDTH, height: HEIGHT, image: canvas.toDataURL('image/png')
     });
     window.outMathedCharacter = character;
+    const properties = {
+      game_mode: mode === 'bump' ? 'bump' : 'projectile',
+      opponent_type: opponent === 'ai' ? 'ai' : 'human',
+      ink_used: Number(character.inkUsed.toFixed(2)),
+    };
+    window.posthog?.capture('character_created', properties);
+    window.posthog?.logger?.info('character creation completed', {
+      event: 'character_creation_completed', ...properties,
+    });
     try {
       const json = JSON.stringify(character);
       sessionStorage.setItem('outMathedCharacter', json);

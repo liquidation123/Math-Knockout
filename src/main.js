@@ -140,6 +140,10 @@ fire.addEventListener("click", () => {
   if (opponent.isAI && round.currentTeam === 1) return;
   refreshPreview();
   if (firePreview(round, round.selected[round.currentTeam], preview, Number(forceSlider.value))) {
+    window.posthog?.capture("projectile_attack_fired", {
+      opponent_type: opponent.isAI ? "ai" : "human",
+      force: Number(forceSlider.value),
+    });
     console.info("Fired", round.players[round.attack.attackerIndex].name, round.attack.equation.name);
     view.canvas.focus({ preventScroll: true });
     updateReadout();
@@ -202,6 +206,11 @@ function updateSimulation(dt) {
     }
   });
   if (round.result) {
+    const properties = { winner: round.result.winner.toLowerCase(), opponent_type: opponent.isAI ? "ai" : "human" };
+    window.posthog?.capture("projectile_round_completed", properties);
+    window.posthog?.logger?.info("projectile round completed", {
+      event: "projectile_round_completed", ...properties,
+    });
     opponent.cancel();
     aiPending = false;
     console.info("Round complete", round.result);
