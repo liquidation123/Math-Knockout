@@ -9,10 +9,17 @@
 body { min-width: 320px; margin: 0; }
 a { color: inherit; -webkit-tap-highlight-color: transparent; }
 
-.home { position: relative; display: flex; min-height: 100svh; isolation: isolate; overflow: hidden; }
+.home { position: relative; display: flex; flex-direction: column; min-height: 100svh; isolation: isolate; overflow: hidden; }
 .landscape, .sky-shade { position: absolute; inset: 0; pointer-events: none; }
 .landscape { z-index: -2; background: url('/assets/hero-landscape.jpg') center / cover no-repeat; }
 .sky-shade { z-index: -1; background: linear-gradient(180deg, #063e723d, transparent 50%, #03232c52); }
+
+.site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px clamp(20px, 4vw, 60px); }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 900; letter-spacing: .1em; text-decoration: none; text-shadow: 0 2px 10px #0a385c; }
+.brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border: 2px solid #fff4db; border-radius: 10px; font-size: 22px; line-height: 1; transform: rotate(-9deg); }
+.guide-trigger { border: 1px solid #fff8e8ad; border-radius: 100px; padding: 11px 17px; background: #04355e55; color: #fff8e8; font: inherit; font-size: 12px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(8px); }
+.guide-trigger span { margin-left: 8px; }
+.guide-trigger:hover { background: #04355e99; }
 
 .hero { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 34px; padding: 36px 20px 56px; text-align: center; }
 h1 { margin: 0; color: #fff3d9; font-size: clamp(48px, 11vw, 150px); font-weight: 1000; line-height: 1.12; letter-spacing: -.082em; white-space: nowrap; -webkit-text-stroke: .064em #0e395a; paint-order: stroke fill; text-shadow: 0 .065em 0 #062b49, 0 .12em .15em #0020373d; }
@@ -22,8 +29,18 @@ h1 { margin: 0; color: #fff3d9; font-size: clamp(48px, 11vw, 150px); font-weight
 .play-button:hover { transform: translateY(3px); box-shadow: 0 2px 0 #f8b22e, 0 6px 0 #0c3552; }
 .quick-play { padding: 7px 4px; font-size: 13px; font-weight: 800; text-underline-offset: 4px; }
 :focus-visible { outline: 3px solid #fff4a4; outline-offset: 4px; }
+.guide { width: min(440px, calc(100% - 32px)); padding: 32px; border: 4px solid #113c5b; border-radius: 25px; background: #fff8e8; color: #153d5b; box-shadow: 0 12px 0 #efa929, 0 26px 70px #001a3366; }
+.guide::backdrop { background: #02213e94; backdrop-filter: blur(4px); }
+.guide form { position: absolute; top: 12px; right: 15px; }
+.guide-close { border: 0; background: none; color: inherit; font-size: 30px; cursor: pointer; }
+.guide h2 { margin: 0 0 22px; font-size: 36px; }
+.guide ol { display: grid; gap: 16px; margin: 0; padding-left: 24px; font: 15px/1.5 system-ui, sans-serif; }
 
 @media (max-width: 700px) {
+  .site-header { padding: 18px 20px; }
+  .brand { font-size: 10px; gap: 8px; }
+  .brand-mark { width: 28px; height: 28px; font-size: 18px; }
+  .guide-trigger { padding: 9px 12px; font-size: 10px; }
   .hero { gap: 24px; }
   .mode-choices { gap: 18px; }
 }
