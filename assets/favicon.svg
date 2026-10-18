@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0e395a"/>
+  <g transform="rotate(-9 32 32)">
+    <rect x="7" y="7" width="50" height="50" rx="14" fill="#1686d8" stroke="#fff4db" stroke-width="4"/>
+    <text x="32" y="46" text-anchor="middle" fill="#fff8e8" font-family="Trebuchet MS,Arial,sans-serif" font-size="43" font-weight="900">∑</text>
+  </g>
+</svg>

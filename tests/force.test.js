@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildPreview } from "../src/equations.js";
-import { createRound, firePreview, updateRound } from "../src/combat.js";
+import { createRound, firePreview, setRoundTeamBody, updateRound } from "../src/combat.js";
 import { ARENA, FIXED_STEP, PLAYER_SIZE } from "../src/physics.js";
 import { DEFAULT_FORCE, MIN_FORCE, KNOCKBACK, RECOIL, updateProjectile } from "../src/projectile.js";
 
@@ -60,6 +60,21 @@ test("higher force scales both impulses, divides by mass, and leaves damage and 
   }
   close(results[1].recoil / results[0].recoil, 6);
   close(results[1].knockback / results[0].knockback, 6);
+});
+
+test("a heavy drawn shooter recoils less than its light drawn target moves", () => {
+  const round = groundedRound();
+  setRoundTeamBody(round, 0, "1".repeat(2048) + "0".repeat(8192));
+  setRoundTeamBody(round, 1, "1".repeat(100) + "0".repeat(10140));
+  const target = round.players[4];
+  target.position.x = 0;
+  const { shooter, attack } = fire(round, "0");
+  updateProjectile(attack, round.players, 1.1);
+  assert.equal(target.health, 80);
+  assert.ok(shooter.mass > 3 * target.mass);
+  close(shooter.velocity.x, -RECOIL / shooter.mass);
+  close(target.velocity.x, KNOCKBACK / target.mass);
+  assert.ok(target.velocity.x > 10 * Math.abs(shooter.velocity.x));
 });
 
 test("recoil opposes the initial XY segment for both teams and curved shots", () => {

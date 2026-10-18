@@ -2,8 +2,9 @@ import { createVictoryScreen } from "./victory.js";
 import { createEquationInput } from "./curve-input.js";
 import { readSavedMask } from "./saved-character.js";
 import { createView } from "./scene.js";
+import { starterMask } from "./body.js";
 import { takeFixedSteps } from "./physics.js";
-import { createRound, updateRound, firePreview, resignRound, selectCharacter, TEAM_NAMES } from "./combat.js";
+import { createRound, updateRound, firePreview, resignRound, selectCharacter, setRoundTeamBody, TEAM_NAMES } from "./combat.js";
 import { buildPreview } from "./equations.js";
 import { shotDirection } from "./aiming.js";
 import { chooseProjectileAction } from "./ai.js";
@@ -25,8 +26,11 @@ view.ready.then(() => {
   document.querySelector("#loading").textContent = "Mountain failed to load. Reload to retry.";
   console.error("Mountain load failed:", error);
 });
+let blueMask = starterMask(0);
 readSavedMask().then((mask) => {
   if (mask) {
+    setRoundTeamBody(round, 0, mask);
+    blueMask = mask;
     for (let index = 0; index < 3; index += 1) view.setPlayerShape(index, mask);
     document.querySelector("#character-note").firstChild.textContent = "Blue uses your drawing; Red has its own characters · ";
   }
@@ -76,6 +80,8 @@ function resetRound() {
   aiPending = false;
   aiFailed = false;
   round = createRound();
+  setRoundTeamBody(round, 0, blueMask);
+  setRoundTeamBody(round, 1, starterMask(1));
   clock = { accumulator: 0 };
   previousTime = undefined;
   reportedEliminations = new Set();
