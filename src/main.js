@@ -168,10 +168,7 @@ function updateReadout() {
     const id = name.toLowerCase();
     document.querySelector("#" + id + "-health").value = alive.reduce((sum, player) => sum + player.health, 0);
     document.querySelector("#" + id + "-stats").textContent = alive.length + "/3 surviving";
-    document.querySelector("#" + id + "-characters").textContent = members.map((player) =>
-      player.name + ": " + (player.eliminated ? "OUT" : player.health + " HP") +
-      (round.players[round.selected[round.currentTeam]] === player && !round.result ? " ◀" : ""),
-    ).join("\n");
+    renderMembers(document.querySelector("#" + id + "-characters"), members);
   });
   const selected = round.players[round.selected[round.currentTeam]];
   document.querySelector("#turn").textContent = round.result ? "Round complete" : TEAM_NAMES[round.currentTeam] + "'s turn";
@@ -180,6 +177,27 @@ function updateReadout() {
     selected.eliminated || Math.abs(selected.position.z - 0.5) > 0.05);
   if (status.textContent !== round.message) status.textContent = round.message;
   if (round.result) victory.show(round);
+}
+
+// One chip per character: name, HP and a small health bar. This runs every
+// frame, so the chips are rebuilt only when something actually changes.
+function renderMembers(list, members) {
+  const selected = round.result ? null : round.players[round.selected[round.currentTeam]];
+  const key = members.map((player) => player.name + player.health + player.eliminated + (player === selected)).join("|");
+  if (list.dataset.key === key) return;
+  list.dataset.key = key;
+  list.replaceChildren(...members.map((player) => {
+    const chip = document.createElement("span");
+    chip.className = "member" + (player === selected ? " selected" : "") + (player.eliminated ? " out" : "");
+    chip.style.setProperty("--hp", player.eliminated ? 0 : player.health / 100);
+    if (player === selected) chip.setAttribute("aria-current", "true");
+    const label = document.createElement("b");
+    label.textContent = player.name;
+    const hp = document.createElement("span");
+    hp.textContent = player.eliminated ? "OUT" : player.health + " HP";
+    chip.append(label, hp, document.createElement("i"));
+    return chip;
+  }));
 }
 
 function drawAttack() {

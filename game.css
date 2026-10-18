@@ -34,6 +34,58 @@ progress::-webkit-progress-bar { background: #2a3547; }
 .blue progress::-moz-progress-bar { background: #76b7ff; }
 .red progress::-moz-progress-bar { background: #ff8c99; }
 .character-list { white-space: pre-line; font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+
+/* Top HUD: glass panel, team cards and one chip per character. */
+#hud {
+  padding: 12px 14px; border-radius: 14px; border-color: #ffffff1f;
+  background: linear-gradient(180deg, #172a42f2, #0d1828f2);
+  box-shadow: 0 10px 28px #0007, inset 0 1px 0 #ffffff14;
+  backdrop-filter: blur(6px);
+}
+#hud .title-row { justify-content: flex-start; }
+#hud h1 { margin-right: auto; font-size: 19px; letter-spacing: 0.01em; }
+#hud .mode-link {
+  padding: 5px 11px; border: 1px solid #ffefb355; border-radius: 999px;
+  text-decoration: none; font-weight: 600; background: #ffefb30f;
+}
+#hud .mode-link:hover { background: #ffefb326; }
+#restart {
+  padding: 6px 14px; border: 0; border-radius: 999px; font-weight: 700;
+  background: linear-gradient(180deg, #4d9cff, #2f74d6); box-shadow: 0 2px 8px #2f74d666;
+}
+#restart:hover { background: linear-gradient(180deg, #63aaff, #3a82e4); }
+#hud .character-note { margin: 6px 0 0; color: #9fb2c9; font-size: 12px; }
+#hud .teams { gap: 10px; margin-top: 10px; }
+#hud .team {
+  padding: 8px 10px; border-radius: 10px;
+  background: #ffffff08; border: 1px solid #ffffff12;
+}
+#hud .team.blue { background: linear-gradient(180deg, #76b7ff1c, #76b7ff08); border-color: #76b7ff38; }
+#hud .team.red { background: linear-gradient(180deg, #ff8c991c, #ff8c9908); border-color: #ff8c9938; }
+#hud .team-heading strong { font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+#hud .team-heading span { padding: 2px 8px; border-radius: 999px; background: #0004; font-variant-numeric: tabular-nums; }
+#hud progress { height: 6px; margin: 7px 0; border-radius: 999px; overflow: hidden; }
+#hud progress::-webkit-progress-bar { background: #0006; border-radius: 999px; }
+#hud progress::-webkit-progress-value { border-radius: 999px; transition: width 0.3s; }
+#hud .character-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; white-space: normal; }
+.member {
+  position: relative; display: flex; flex-direction: column; gap: 1px;
+  padding: 4px 6px 6px; border-radius: 6px; background: #0003;
+  border: 1px solid transparent; overflow: hidden;
+}
+.member b { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member span { color: #bac5d5; font-size: 10px; }
+/* Mini health bar: its width is the character's health fraction (--hp from 0 to 1). */
+.member i {
+  position: absolute; left: 0; bottom: 0; height: 2px;
+  width: calc(var(--hp, 1) * 100%); background: currentColor; transition: width 0.3s;
+}
+.blue .member i { color: #76b7ff; }
+.red .member i { color: #ff8c99; }
+.member.selected { background: #ffef8b1f; border-color: #ffef8b99; box-shadow: 0 0 10px #ffef8b33; }
+.member.selected b { color: #ffef8b; }
+.member.out { opacity: 0.4; }
+.member.out b { text-decoration: line-through; }
 .turn-row { font-size: 13px; margin-bottom: 8px; }
 .symbol-row { display: flex; gap: 5px; margin-top: 6px; }
 .symbol-row button { padding: 2px 10px; font-size: 13px; }
@@ -81,6 +133,17 @@ summary { cursor: pointer; }
   .teams { gap: 14px; }
   h1 { font-size: 19px; }
   .team-heading { gap: 5px; }
+  #hud { padding: 9px 10px; }
+  #hud .title-row { flex-wrap: nowrap; gap: 6px; }
+  #hud h1 { font-size: 16px; white-space: nowrap; }
+  #hud .mode-link, #restart { padding: 4px 9px; font-size: 11px; }
+  #hud .teams { gap: 6px; margin-top: 7px; }
+  #hud .team { padding: 6px 7px; }
+  #hud .team-heading strong { font-size: 12px; }
+  #hud .character-list { gap: 3px; }
+  .member { padding: 3px 4px 5px; }
+  .member b { font-size: 10px; }
+  .member span { font-size: 9px; }
 }
 @media (max-height: 550px) and (min-width: 600px) {
   .panel { padding: 6px 10px; }
@@ -92,6 +155,11 @@ summary { cursor: pointer; }
   button { padding: 5px 10px; }
   .examples { display: none; }
   .turn-row { margin-bottom: 4px; }
+  #hud { padding: 6px 10px; }
+  #hud .teams { margin-top: 5px; }
+  #hud .team { padding: 4px 8px; }
+  #hud progress { margin: 4px 0; }
+  .member { flex-direction: row; justify-content: space-between; padding: 2px 5px 4px; }
 }
 
 
