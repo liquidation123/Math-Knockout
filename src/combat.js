@@ -1,4 +1,5 @@
 import { ARENA, applyImpulse, createPlayer, playersAreStill, updatePlayer } from "./physics.js";
+import { bodyFromMask } from "./body.js";
 import { shotDirection, shotTarget } from "./aiming.js";
 import { generateSpawns } from "./spawns.js";
 import { DEFAULT_FORCE, RECOIL, createAttack, updateProjectile } from "./projectile.js";
@@ -28,6 +29,11 @@ export function createRound(automatic = false, random = Math.random) {
     result: null,
     message: "Blue's turn. Click a blue character, preview an equation, then Fire.",
   };
+}
+
+export function setRoundTeamBody(round, team, mask) {
+  const { mass } = bodyFromMask(mask);
+  round.players.filter((player) => player.team === team).forEach((player) => { player.mass = mass; });
 }
 
 export function selectCharacter(round, index) {
