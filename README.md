@@ -22,6 +22,30 @@ tab's session storage. No combat state is shared between the two entry points.
 Older mountain invite links using `/play.html?room=...` redirect to Bump Duel
 with the same room ID; plain `/play.html` always starts Projectile Duel.
 
+## Drawn characters (data handoff)
+
+`create.html` gives each player 10 seconds and 20 L of ink (1 L covers 1% of the
+720×440 canvas; repainting covered pixels is free). Clear needs two taps and can
+be undone. When time runs out, `create.js` saves one JSON record to
+`sessionStorage` under both `outMathedCharacter` (latest) and
+`outMathedCharacter:<id>`. Read it with `loadSavedCharacter(id)` in
+`src/saved-character.js`. The record contains:
+
+- `id`, `format: "out-mathed-character"`, `version: 1`, `createdAt`
+- `image`: transparent PNG data URL, plus the original `inkUsed`, `width`, `height`
+- `mask`: full-resolution occupancy mask (alpha ≥ 128), run-length encoded row by
+  row, starting with an empty run. Use `decodeRuns` to rebuild it.
+- `material`: density (1 kg/L), pixel size (2.5 mm), and ink thickness (≈5.05 cm)
+- `physics`: ink litres, area (m²), mass (kg), centre of mass (pixels, 0–1, and
+  metres), spin moment of inertia (kg·m²), and the solid bounding box
+
+`src/character-geometry.js` holds this math as small, pure functions. Mass is
+density × volume. The centre of mass is the coverage-weighted average pixel
+position. Inertia is Σ m(r² + s²/6) over square pixels. The occupancy mask is ready
+for later polygon extraction (marching squares) or 3D extrusion by the ink
+thickness. Existing game modes still use `readSavedMask()` and Bump Duel's server
+mass formula unchanged.
+
 ## Shared mountain and deliberate adaptations
 
 Both modes use `assets/mountain.glb`, its painted materials, cliff, foliage,

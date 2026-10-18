@@ -26,13 +26,13 @@
           <canvas id="drawing" data-tool="pencil" width="720" height="440" aria-label="Character drawing canvas"></canvas>
         </div>
 
-        <div class="ink-area" aria-label="Ink remaining">
-          <div class="vial">
+        <div class="ink-area" role="meter" aria-label="Ink remaining in litres" aria-valuemin="0" aria-valuemax="20" aria-valuenow="20">
+          <div class="vial" aria-hidden="true">
             <div class="vial-cap top"></div>
-            <div class="vial-glass"><div class="ink-liquid" id="ink-liquid"></div><div class="glass-shine"></div></div>
+            <div class="vial-glass"><div class="ink-liquid" id="ink-liquid"></div><div class="glass-ticks"></div><div class="glass-shine"></div></div>
             <div class="vial-cap bottom"></div>
           </div>
-          <div class="ink-badge badge"><small>INK</small><strong id="liters">20.00L</strong></div>
+          <div class="ink-badge badge"><strong id="liters">20L</strong></div>
         </div>
 
         <div class="toolbar" role="toolbar" aria-label="Drawing tools">

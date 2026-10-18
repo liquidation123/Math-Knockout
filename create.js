@@ -1,14 +1,24 @@
-const MAX_INK = 20;
-const WIDTH = 720;
-const HEIGHT = 440;
+import {
+  CANVAS_HEIGHT as HEIGHT, CANVAS_WIDTH as WIDTH, LITRES_PER_FULL_CANVAS, MAX_INK_LITRES as MAX_INK,
+  alphaChannel, createCharacterRecord
+} from './src/character-geometry.js';
+
 const COLOR = '#073b96';
+const CLEAR_CONFIRM_MS = 2000;
 
 // One liter paints 1% of the board. Transparent pixels cost nothing;
 // painting over existing pixels only costs the newly covered fraction.
 export function litersUsed(pixels) {
   let coverage = 0;
   for (let i = 3; i < pixels.length; i += 4) coverage += pixels[i] / 255;
-  return 100 * coverage / (pixels.length / 4);
+  return LITRES_PER_FULL_CANVAS * coverage / (pixels.length / 4);
+}
+
+// Round down to 0.1 L so the capsule never shows more ink than is left:
+// 20 → "20L", 17.46 → "17.4L".
+export function formatLitres(litres) {
+  const tenths = Math.floor(litres * 10 + 1e-9) / 10;
+  return `${Number.isInteger(tenths) ? tenths : tenths.toFixed(1)}L`;
 }
 
 export function secondsLeft(deadline, now) {
@@ -44,10 +54,11 @@ if (typeof document !== 'undefined') {
   const liters = document.querySelector('#liters');
   const liquid = document.querySelector('#ink-liquid');
   const status = document.querySelector('#status');
-  const buttons = [...document.querySelectorAll('[data-tool]')];
+  const buttons = [...document.querySelectorAll('button[data-tool]')];
   const undo = document.querySelector('#undo');
   const clear = document.querySelector('#clear');
   const arena = document.querySelector('#arena-link');
+  const inkMeter = document.querySelector('.ink-area');
   const mode = new URLSearchParams(window.location?.search || '').get('mode');
   arena.href = mode === 'bump' ? '/bump.html' : '/play.html';
   arena.textContent = mode === 'bump' ? 'Start Bump Duel →' : 'Start Projectile Duel →';
@@ -57,6 +68,7 @@ if (typeof document !== 'undefined') {
   let deadline = 0;
   let timer = 0;
   let locked = false;
+  let clearArmedUntil = 0;
 
   const snapshot = () => ctx.getImageData(0, 0, WIDTH, HEIGHT);
   const used = () => litersUsed(snapshot().data);
@@ -64,8 +76,10 @@ if (typeof document !== 'undefined') {
 
   function updateInk() {
     const remaining = Math.max(0, MAX_INK - used());
-    liters.textContent = `${remaining.toFixed(2)}L`;
+    // The number and the capsule level always come from the same value.
+    liters.textContent = formatLitres(remaining);
     liquid.style.height = `${remaining / MAX_INK * 100}%`;
+    inkMeter?.setAttribute('aria-valuenow', remaining.toFixed(1));
   }
 
   function lock() {
@@ -77,10 +91,16 @@ if (typeof document !== 'undefined') {
     active = null;
     canvas.classList.add('locked');
     [...buttons, undo, clear].forEach(button => { button.disabled = true; });
-    const character = { image: canvas.toDataURL('image/png'), inkUsed: used(), width: WIDTH, height: HEIGHT };
+    disarmClear();
+    // Save a transparent PNG for display plus geometry/physics for the game engine.
+    const character = createCharacterRecord({
+      alpha: alphaChannel(snapshot().data), width: WIDTH, height: HEIGHT, image: canvas.toDataURL('image/png')
+    });
     window.outMathedCharacter = character;
     try {
-      sessionStorage.setItem('outMathedCharacter', JSON.stringify(character));
+      const json = JSON.stringify(character);
+      sessionStorage.setItem('outMathedCharacter', json);
+      sessionStorage.setItem(`outMathedCharacter:${character.id}`, json);
       say('Time! Your character is saved. Start your selected game mode below.');
     } catch {
       say('Time! Your character is locked. Browser storage is unavailable.');
@@ -133,6 +153,7 @@ if (typeof document !== 'undefined') {
   canvas.addEventListener('pointerdown', event => {
     if (deadline && Date.now() >= deadline) lock();
     if (locked || event.button !== 0) return;
+    disarmClear();
     startClock();
     const at = point(event);
     const before = snapshot();
@@ -201,8 +222,23 @@ if (typeof document !== 'undefined') {
     updateInk();
     say('Last action undone.');
   });
+  function disarmClear() {
+    clearArmedUntil = 0;
+    clear.classList.remove('confirm');
+    clear.setAttribute('aria-label', 'Clear drawing');
+  }
+  // Clearing needs two taps within 2 seconds, so one stray tap cannot erase a drawing.
   clear.addEventListener('click', () => {
     if (locked || used() === 0) return;
+    if (!clearArmedUntil || Date.now() > clearArmedUntil) {
+      clearArmedUntil = Date.now() + CLEAR_CONFIRM_MS;
+      clear.classList.add('confirm');
+      clear.setAttribute('aria-label', 'Tap again to clear');
+      say('Tap clear again to erase everything.');
+      setTimeout(() => { if (Date.now() >= clearArmedUntil) disarmClear(); }, CLEAR_CONFIRM_MS);
+      return;
+    }
+    disarmClear();
     history.push(snapshot());
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
     updateInk();
