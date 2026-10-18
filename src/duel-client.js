@@ -1,4 +1,5 @@
 import { buildPreview } from "./equations.js";
+import { forwardDirection } from "./aiming.js";
 import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, safeTravelPath, setDuelBody, updateDuel } from "./duel.js";
 import { takeFixedSteps } from "./physics.js";
 import { createView } from "./scene.js";
@@ -16,7 +17,7 @@ let mountainReady = false;
 let startupFailed = false, leaving = false;
 let socket;
 let state, previewLine, preview, lastKey = "", summitView = false, previewStarted = 0, lastCount = 0;
-let replayFrames = null, replayStarted = 0;
+let replayFrames = null, replayStarted = 0, effectsTime = Date.now();
 let pathWasLocked = false;
 const localPage = ["localhost", "127.0.0.1", "[::1]"].includes(room.hostname);
 const quick = room.searchParams.get("quick") === "1";
@@ -39,7 +40,7 @@ function showConnectionError(message, error) {
   $("#retry").hidden = false;
   $("#side").textContent = "Connection unavailable";
   $("#error").textContent = "Offline";
-  for (const id of ["#equation", "#lock", "#reset", "#view", "#again"]) $(id).disabled = true;
+  for (const id of ["#equation", "#lock", "#reset", "#view", "#again", "#bump-force"]) $(id).disabled = true;
   document.querySelectorAll("[data-aim]").forEach((button) => { button.disabled = true; });
   console.error("Bump Duel:", message, error || "");
   socket?.close();
@@ -79,14 +80,16 @@ socket?.addEventListener("open", async () => {
 function drawPreview() {
   if (startupFailed || !state || state.side == null || state.phase !== "planning" || state.locked[state.side]) return;
   const player = state.players[state.side];
-  const key = $("#equation").value + player.position.x + "," + player.position.y + "," + state.radius + "," + player.mass;
+  const direction = forwardDirection(player.position, state.players[1 - state.side].position, state.side === 0 ? 1 : -1);
+  const force = Number($("#bump-force").value);
+  const key = $("#equation").value + player.position.x + "," + player.position.y + "," + state.radius + "," + player.mass + "," + direction + "," + force;
   if (key === lastKey) return;
   lastKey = key;
-  preview = buildPreview($("#equation").value, player.position, state.side === 0 ? 1 : -1);
+  preview = buildPreview($("#equation").value, player.position, direction);
   if (previewLine) view.removeCurve(previewLine);
   previewLine = null;
   if (preview.error) { $("#error").textContent = preview.error; return; }
-  const points = safeTravelPath(preview.path, player.mass, state.radius);
+  const points = safeTravelPath(preview.path, player.mass, state.radius, force);
   if (points.length > 1) {
     previewLine = view.drawCurve([points], 0xff2846, "duel");
     previewStarted = Date.now();
@@ -104,7 +107,7 @@ function suggestPaths() {
   const own = state.players[state.side].position;
   const rival = state.players[1 - state.side].position;
   const slope = interceptSlope(own, rival, state.players[state.side].mass,
-    state.players[1 - state.side].mass, state.side, state.radius);
+    state.players[1 - state.side].mass, state.side, state.radius, Number($("#bump-force").value));
   direct.disabled = flank.disabled = slope === null;
   $(".examples span").textContent = slope === null ? "Rival out of reach; choose a safe path" : "Assuming a straight rival path";
   if (direct.disabled) return;
@@ -121,6 +124,7 @@ function updateScreen() {
   $("#stage").textContent = `Round ${state.round} · ${state.round >= 3 ? "ruins + " : ""}rim shrinks after launch`;
   const canEdit = mountainReady && phase === "planning" && !locked[side];
   $("#equation").disabled = $("#lock").disabled = !canEdit;
+  $("#bump-force").disabled = !canEdit;
   const mathField = document.querySelector("math-field");
   if (mathField) mathField.readOnly = !canEdit;
   $("#view").disabled = !mountainReady || players[side].eliminated;
@@ -231,6 +235,11 @@ socket?.addEventListener("close", (event) => {
 window.addEventListener("pagehide", () => { leaving = true; document.exitPointerLock?.(); socket?.close(); });
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 $("#equation").addEventListener("input", drawPreview);
+$("#bump-force").addEventListener("input", () => {
+  $("#bump-force-value").textContent = Number($("#bump-force").value).toFixed(1) + "×";
+  drawPreview();
+  if (state?.phase === "planning") suggestPaths();
+});
 document.querySelectorAll("[data-aim]").forEach((button) => button.addEventListener("click", () => {
   $("#equation").value = button.dataset.equation;
   drawPreview();
@@ -241,10 +250,10 @@ $("#form").addEventListener("submit", (event) => {
   drawPreview();
   if (startupFailed || !mountainReady || preview?.error || state?.phase !== "planning") return;
   if (solo) {
-    const error = lockEquation(duel, 0, $("#equation").value);
+    const error = lockEquation(duel, 0, $("#equation").value, Number($("#bump-force").value));
     if (error) $("#error").textContent = error;
     else publishSolo();
-  } else if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "lock", expression: $("#equation").value }));
+  } else if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "lock", expression: $("#equation").value, force: Number($("#bump-force").value) }));
 });
 function restart() {
   if (solo) startSolo();
@@ -313,6 +322,9 @@ function frame() {
     dots.geometry.setDrawRange(0, Math.min(dots.userData.total,
       Math.ceil((Date.now() - previewStarted) / 1800 * dots.userData.total)));
   }
+  const effectsNow = Date.now();
+  view.updateEffects?.(Math.min(.1, (effectsNow - effectsTime) / 1000));
+  effectsTime = effectsNow;
   view.render();
   requestAnimationFrame(frame);
 }

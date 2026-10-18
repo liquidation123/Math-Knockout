@@ -1,6 +1,7 @@
 import { buildPreview } from "./equations.js";
 import { firePreview, selectCharacter, updateRound } from "./combat.js";
 import { FIXED_STEP, insideArena } from "./physics.js";
+import { shotDirection } from "./aiming.js";
 
 export const AI_LEVELS = { ai: { description: "Simulates shots using the same physics as you." } };
 const copyPlayers = (players) => players.map((player) => ({ ...player,
@@ -22,13 +23,14 @@ export function projectileCandidates(round) {
   const targets = round.players.filter((player) => player.team === 0 && !player.eliminated && player.health > 0);
   const choices = [[0, .5], [0, 1.8], [0, 3], [.045, 1], [-.045, 1], ["wave", 1]];
   return choices.flatMap(([bend, force]) => shooters.flatMap(({ player, index }) => targets.map((target) => ({
-    playerIndex: index, expression: aimedCurve(player.position, target.position, bend), force,
+    playerIndex: index, targetIndex: round.players.indexOf(target), expression: aimedCurve(player.position, target.position, bend), force,
   }))));
 }
 
 export function scoreProjectileAction(round, action) {
   const trial = { ...round, players: copyPlayers(round.players), selected: [...round.selected], attack: null, result: null, automatic: false };
-  const preview = buildPreview(action.expression, trial.players[action.playerIndex].position, -1);
+  const preview = buildPreview(action.expression, trial.players[action.playerIndex].position,
+    shotDirection(trial.players, action.playerIndex, action.targetIndex));
   if (!selectCharacter(trial, action.playerIndex) || !firePreview(trial, action.playerIndex, preview, action.force)) return -Infinity;
   // Test each candidate with the real fixed-step physics; never change the live round.
   for (let step = 0; step < 6 / FIXED_STEP; step++) updateRound(trial, FIXED_STEP);

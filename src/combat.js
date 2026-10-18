@@ -1,6 +1,7 @@
-import { ARENA, applyImpulse, createPlayer, updatePlayer } from "./physics.js";
+import { ARENA, applyImpulse, createPlayer, playersAreStill, updatePlayer } from "./physics.js";
+import { shotDirection, shotTarget } from "./aiming.js";
 import { generateSpawns } from "./spawns.js";
-import { ATTACK_DURATION, DEFAULT_FORCE, RECOIL, createAttack, updateProjectile } from "./projectile.js";
+import { DEFAULT_FORCE, RECOIL, createAttack, updateProjectile } from "./projectile.js";
 export { DAMAGE, KNOCKBACK, ATTACK_DURATION, createAttack } from "./projectile.js";
 
 export const TURN_INTERVAL = 1.25;
@@ -40,8 +41,8 @@ export function selectCharacter(round, index) {
 function applyRecoil(attacker, attack) {
   const origin = attack.origin;
   const next = attack.path.find((point) => point.x !== origin.x || point.y !== origin.y);
-  // A one-point curve has no travel direction; use the team's firing direction.
-  const dx = next ? next.x - origin.x : (attacker.team === 0 ? 1 : -1);
+  // A one-point curve has no tangent; use the chosen firing direction.
+  const dx = next ? next.x - origin.x : attack.direction;
   const dy = next ? next.y - origin.y : 0;
   const length = Math.hypot(dx, dy);
   const impulse = RECOIL * attack.force;
@@ -50,6 +51,8 @@ function applyRecoil(attacker, attack) {
 
 function startAttack(round, attackerIndex, equation, preview = null, force = DEFAULT_FORCE) {
   round.attack = createAttack(attackerIndex, round.players, equation, round.time, preview, force);
+  round.attack.direction = shotDirection(round.players, attackerIndex);
+  round.settledFor = 0;
   applyRecoil(round.players[attackerIndex], round.attack);
   round.castCount += 1;
   round.nextCastAt = round.time + TURN_INTERVAL;
@@ -95,10 +98,7 @@ function checkEliminations(round) {
 
 function automaticEquation(round, index) {
   const attacker = round.players[index];
-  const enemies = round.players.filter((player) => player.team !== attacker.team && !player.eliminated);
-  const target = enemies.reduce((best, player) =>
-    Math.abs(player.position.y - attacker.position.y) < Math.abs(best.position.y - attacker.position.y)
-      ? player : best);
+  const target = shotTarget(round.players, index);
   const base = AUTO_EQUATIONS[Math.floor(round.castCount / 2) % AUTO_EQUATIONS.length];
   const dx = target.position.x - attacker.position.x;
   const dy = target.position.y - attacker.position.y;
@@ -122,7 +122,8 @@ export function updateRound(round, dt) {
     if (round.attack.stopped) round.message = round.attack.reason + ".";
     checkEliminations(round);
     if (round.result) return;
-    if (round.attack.stopped && round.attack.age - round.attack.stoppedAt >= ATTACK_DURATION) {
+    round.settledFor = round.attack.stopped && playersAreStill(round.players) ? (round.settledFor || 0) + dt : 0;
+    if (round.attack.stopped && round.settledFor >= .15) {
       round.attack = null;
       round.currentTeam = 1 - round.currentTeam;
       round.message = TEAM_NAMES[round.currentTeam] + "'s turn. Choose a surviving character.";

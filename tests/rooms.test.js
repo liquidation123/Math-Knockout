@@ -35,12 +35,13 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   const clients = [];
   function connect(query = "room=integration-test") {
     const socket = new WebSocket(address.replace("http:", "ws:") + "/?" + query);
-    const client = { socket, state: null, shapes: [] };
+    const client = { socket, state: null, shapes: [], errors: [] };
     clients.push(client);
     socket.on("message", (bytes) => {
       const message = JSON.parse(bytes);
       if (message.type === "state") client.state = message;
       if (message.type === "shape") client.shapes.push(message);
+      if (message.type === "error") client.errors.push(message.error);
     });
     return client;
   }
@@ -54,6 +55,16 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   assert.equal(closeCode, 1008);
   assert.match(closeReason.toString(), /room is full/);
   assert.equal(extra.state, null, "A full room must never assign a fake side.");
+  blue.socket.send(JSON.stringify({ type: "lock", expression: "0", force: 100 }));
+  await waitUntil(() => blue.errors.length);
+  assert.match(blue.errors[0], /Force/);
+  assert.equal(blue.state.locked[0], false);
+  blue.socket.send(JSON.stringify({ type: "lock", expression: "0", force: .5 }));
+  await waitUntil(() => blue.state.locked[0]);
+  assert.equal(blue.state.phase, "planning");
+  assert.equal(blue.state.paths, undefined, "an opponent's chosen path and force stay hidden");
+  blue.socket.send(JSON.stringify({ type: "reset" }));
+  await waitUntil(() => !blue.state.locked[0]);
   const initialPositions = blue.state.players.map((player) => player.position);
   const lockBoth = () => [blue, red].forEach((client) => client.socket.send(JSON.stringify({ type: "lock", expression: "0" })));
   lockBoth();
@@ -71,6 +82,11 @@ test("mode pages, room resets, and Quick Match bot work on the local server", { 
   assert.equal(blue.state.phase, "countdown", "An old timer must not launch the new round early.");
   await waitUntil(() => blue.state.phase === "running");
   assert.ok(blue.state.players.every((player) => player.health === 100));
+  await waitUntil(() => blue.state.round === 2 && red.state.round === 2, 12000);
+  assert.equal(blue.state.radius, red.state.radius);
+  assert.ok(Math.abs(blue.state.radius - 7.55) < 1e-8);
+  assert.equal(blue.state.phase, "planning");
+  assert.ok(blue.state.players.every((p) => Math.hypot(p.position.x, p.position.y) < blue.state.radius));
 
   // Leaving clears the departing player's old drawing on the remaining client.
   const mask = "1".repeat(100) + "0".repeat(10140);

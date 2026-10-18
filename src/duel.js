@@ -1,18 +1,22 @@
 import { buildPreview } from "./equations.js";
-import { ARENA, OBSTACLES, PLAYER_SIZE, applyImpulse, createPlayer, movePlayerXY, updatePlayer } from "./physics.js";
+import { ARENA, OBSTACLES, PLAYER_SIZE, applyImpulse, createPlayer, movePlayerXY, playersAreStill, updatePlayer } from "./physics.js";
+import { forwardDirection } from "./aiming.js";
 import { bodyContact, bodyFromMask, starterMask } from "./body.js";
 
 const LAUNCH_SPEED = 7.5;
 const LAUNCH_FRICTION = 2.25; // Distance = speed²/(2·friction) = 12.5 units.
 export const DUEL_RADIUS = 8.25;
-export const travelDistance = (mass = 1) => LAUNCH_SPEED ** 2 / (2 * LAUNCH_FRICTION * mass);
+const launchSpeed = (mass, force) => LAUNCH_SPEED * force / Math.sqrt(mass);
+export const travelDistance = (mass = 1, force = 1) => LAUNCH_SPEED ** 2 * force ** 2 / (2 * LAUNCH_FRICTION * mass);
 export const insideDuel = (x, y, radius) => Math.hypot(x, y) < radius;
+export const duelObstacles = (round, radius) => round < 3 ? [] : OBSTACLES.slice(0, 2).filter((box) =>
+  Math.hypot(Math.abs(box.x) + box.width / 2, Math.abs(box.y) + box.depth / 2) < radius);
 
-export function interceptSlope(own, rival, ownMass, rivalMass, side, radius) {
+export function interceptSlope(own, rival, ownMass, rivalMass, side, radius, force = 1) {
   const dx = rival.x - own.x, dy = rival.y - own.y;
-  if (dx * (side === 0 ? 1 : -1) < .5) return null;
-  const forward = side === 0 ? 1 : -1;
-  const speed = LAUNCH_SPEED / Math.sqrt(ownMass);
+  if (Math.abs(dx) < .5) return null;
+  const forward = forwardDirection(own, rival, side === 0 ? 1 : -1);
+  const speed = launchSpeed(ownMass, force);
   const rivalSpeed = LAUNCH_SPEED / Math.sqrt(rivalMass);
   // Both launches slow at the same rate. Find the time when our curved-distance
   // travel reaches the rival's straight-line position.
@@ -34,10 +38,11 @@ export function interceptSlope(own, rival, ownMass, rivalMass, side, radius) {
 
 export function chooseBotEquation(duel, random = Math.random) {
   const [human, bot] = duel.players;
-  // The bot sees positions, never the human's hidden equation. Red moves toward -X.
+  // The bot sees positions, never the human's hidden equation.
+  const forward = forwardDirection(bot.position, human.position, -1);
   let away = Math.sign(bot.position.y - human.position.y) || (random() < .5 ? -1 : 1);
   if (Math.abs(bot.position.y) > duel.radius * .4) away = -Math.sign(bot.position.y);
-  const slope = (-away * (.75 + Math.floor(random() * 4) * .2)).toFixed(2);
+  const slope = (forward * away * (.75 + Math.floor(random() * 4) * .2)).toFixed(2);
   return random() < .3 ? `${slope}*x+0.15*sin(1.5*x)` : `${slope}*x`;
 }
 
@@ -51,7 +56,7 @@ export function createDuel() {
   return {
     players, bodies,
     paths: [null, null], locked: [false, false], phase: "planning", elapsed: 0, winner: null,
-    round: 1, radius: DUEL_RADIUS, replay: [], replayTime: 0, finishAt: 0,
+    round: 1, radius: DUEL_RADIUS, replay: [], replayTime: 0,
   };
 }
 
@@ -61,15 +66,18 @@ export function setDuelBody(duel, side, mask) {
   Object.assign(duel.players[side], { mass: body.mass, inertia: body.inertia, radius: body.radius });
 }
 
-export function lockEquation(duel, side, expression) {
+export function lockEquation(duel, side, expression, force = 1) {
   if (duel.phase !== "planning" || duel.locked[side]) return "Already locked.";
+  if (!Number.isFinite(force) || force < .5 || force > 3) return "Choose Force between 0.5 and 3.";
   const player = duel.players[side];
-  const preview = buildPreview(expression, player.position, side === 0 ? 1 : -1);
+  const direction = forwardDirection(player.position, duel.players[1 - side].position, side === 0 ? 1 : -1);
+  const preview = buildPreview(expression, player.position, direction);
   if (preview.error) return preview.error;
   if (preview.path.length < 2) return "Choose a path with room to move.";
-  // Equal launch energy: heavier drawings start slower and travel less far.
-  duel.paths[side] = { points: safeTravelPath(preview.path, player.mass, duel.radius),
-    index: 0, speed: LAUNCH_SPEED / Math.sqrt(player.mass), expression };
+  // Force multiplies forward speed; heavier drawings still start slower.
+  // Capture force and points now so later slider changes cannot move a locked path.
+  duel.paths[side] = { points: safeTravelPath(preview.path, player.mass, duel.radius, force),
+    index: 0, speed: launchSpeed(player.mass, force), expression, force };
   duel.locked[side] = true;
   return "";
 }
@@ -78,6 +86,8 @@ export function launchDuel(duel) {
   if (!duel.locked.every(Boolean)) return false;
   duel.phase = "running";
   duel.elapsed = 0;
+  duel.settledFor = 0;
+  duel.eroding = false;
   return true;
 }
 
@@ -98,9 +108,9 @@ export function travelPath(points, distanceLimit = travelDistance()) {
   return visible;
 }
 
-export function safeTravelPath(points, mass, radius) {
+export function safeTravelPath(points, mass, radius, force = 1) {
   const safeRadius = radius - .2;
-  const path = travelPath(points, travelDistance(mass));
+  const path = travelPath(points, travelDistance(mass, force));
   const safe = [path[0]];
   for (let i = 1; i < path.length; i++) {
     const a = safe.at(-1), b = path[i];
@@ -181,7 +191,7 @@ function collide(duel) {
 export function updateDuel(duel, dt) {
   if (duel.phase !== "running") return;
   duel.elapsed += dt;
-  const obstacles = duel.round >= 3 ? OBSTACLES.slice(0, 2) : [];
+  const obstacles = duelObstacles(duel.round, duel.radius);
   duel.players.forEach((player, side) => {
     const path = duel.paths[side];
     if (!path.done) followPath(player, path, dt, duel.radius, obstacles);
@@ -200,32 +210,37 @@ export function updateDuel(duel, dt) {
   }
   const alive = duel.players.filter((player) => !player.eliminated);
   if (alive.length < 2) {
-    duel.finishAt ||= duel.elapsed + .8; // Let a second falling player finish before naming a winner.
-    if (duel.elapsed >= duel.finishAt) {
+    // Do not declare a still-falling survivor the winner of a simultaneous fall.
+    const still = playersAreStill(duel.players, (x, y) => insideDuel(x, y, duel.radius));
+    duel.settledFor = still ? (duel.settledFor || 0) + dt : 0;
+    if (!alive.length || duel.settledFor >= .15) {
       duel.phase = "finished";
       duel.winner = alive.length ? alive[0].name : "Draw";
     }
-  } else if (duel.elapsed > 8) {
-    duel.phase = "planning";
+  } else if (!duel.eroding) {
+    const still = duel.paths.every((path) => path.done || path.speed < .12) &&
+      playersAreStill(duel.players, (x, y) => insideDuel(x, y, duel.radius));
+    duel.settledFor = still ? (duel.settledFor || 0) + dt : 0;
+    if (duel.settledFor < .15) return;
     duel.round += 1;
     const nextRadius = Math.max(2.8, DUEL_RADIUS - (duel.round - 1) * .7);
     const [blueDistance, redDistance] = duel.players.map((player) =>
       Math.hypot(player.position.x, player.position.y));
     // If both would fall, shrink just until the farther one leaves first.
-    duel.radius = blueDistance >= nextRadius && redDistance >= nextRadius &&
+    duel.radius = Math.min(duel.radius, blueDistance >= nextRadius && redDistance >= nextRadius &&
       Math.abs(blueDistance - redDistance) > .05
-      ? (blueDistance + redDistance) / 2 : nextRadius;
-    duel.paths = [null, null];
-    duel.locked = [false, false];
+      ? (blueDistance + redDistance) / 2 : nextRadius);
     duel.players.forEach((player) => {
       player.velocity.x = player.velocity.y = 0;
-      // A shrinking summit must matter: a character left outside the new ring falls.
-      if (!insideDuel(player.position.x, player.position.y, duel.radius)) player.eliminated = true;
     });
-    const survivors = duel.players.filter((player) => !player.eliminated);
-    if (survivors.length < 2) {
-      duel.phase = "finished";
-      duel.winner = survivors.length ? survivors[0].name : "Draw";
+    // Keep physics running while unsupported characters fall, rather than deleting them.
+    duel.eroding = duel.players.some((player) => !insideDuel(player.position.x, player.position.y, duel.radius));
+    if (duel.eroding) {
+      duel.paths.forEach((path) => { path.done = true; });
+    } else {
+      duel.phase = "planning";
+      duel.paths = [null, null];
+      duel.locked = [false, false];
     }
   }
 }

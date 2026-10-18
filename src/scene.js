@@ -8,6 +8,7 @@ import { effectKind, pathLookAhead } from "./cinematic.js";
 import { createViewGizmo } from "./view-gizmo.js";
 import { bodyFromMask, starterMask } from "./body.js";
 import { createBodyMesh } from "./body-mesh.js";
+import { DUEL_RADIUS, duelObstacles } from "./duel.js";
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-12, 12, 6, -6, 0.1, 100);
@@ -118,6 +119,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     lookPitch = Math.max(-1.2, Math.min(1.2, lookPitch - event.movementY * 0.0025));
   });
 
+  if (mode === "bump") scene.userData.duelRadius = DUEL_RADIUS;
   const ready = createMountain(scene);
   const duelDisk = new THREE.Mesh(new THREE.CircleGeometry(1, 96),
     new THREE.MeshBasicMaterial({ color: 0xf0ff8c, transparent: true, opacity: .09, depthWrite: false }));
@@ -129,9 +131,22 @@ export function createView(container, hud, controls, mode = "projectile") {
   if (mode === "bump") scene.userData.stones.count = 0;
   function setDuelRound(round, radius) {
     if (mode !== "bump") return;
+    const previousRadius = scene.userData.duelRadius;
+    if (radius !== previousRadius) {
+      scene.userData.duelRadius = radius;
+      scene.userData.erodingIsland?.setRadius(radius);
+      if (radius < previousRadius) {
+        // Small falling chips mark the newly eroded edge; these never collide.
+        for (let i = 0; i < 12; i++) {
+          const angle = i / 12 * Math.PI * 2;
+          createImpact("Obstacle", { x: Math.cos(angle) * previousRadius,
+            y: Math.sin(angle) * previousRadius, z: -.1 });
+        }
+      }
+    }
     duelDisk.scale.set(radius, radius, 1);
     duelRim.scale.set(radius, radius, 1);
-    scene.userData.stones.count = round >= 3 ? 24 : 0;
+    scene.userData.stones.count = duelObstacles(round, radius).length * 12;
   }
 
   const gridLines = new THREE.LineSegments(

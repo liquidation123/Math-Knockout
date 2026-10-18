@@ -84,7 +84,7 @@ test("heavier drawings launch slower, and each round tightens the circular bound
   assert.ok(duel.paths[0].speed < duel.paths[1].speed);
   duel.paths.forEach((path) => { path.done = true; });
   duel.elapsed = 8;
-  updateDuel(duel, FIXED_STEP);
+  for (let i = 0; i < 24 && duel.phase === "running"; i++) updateDuel(duel, FIXED_STEP);
   assert.equal(duel.phase, "planning");
   assert.equal(duel.round, 2);
   assert.ok(Math.abs(duel.radius - 7.55) < 1e-8);
@@ -103,14 +103,19 @@ test("bot varies evasive paths without reading the hidden human equation", () =>
   assert.equal(first.lastImpact, undefined, "the bot should miss a straight player launch");
 });
 
-test("the shrinking ring eliminates a character left near the old edge", () => {
+test("the shrinking island lets a character fall before eliminating it", () => {
   const duel = createDuel();
   lockEquation(duel, 0, "0"); lockEquation(duel, 1, "0"); launchDuel(duel);
   duel.paths.forEach((path) => { path.done = true; });
   duel.players[0].position.x = 7.8;
   duel.players[1].position.x = 0;
   duel.elapsed = 8;
-  updateDuel(duel, FIXED_STEP);
+  for (let i = 0; i < 24; i++) updateDuel(duel, FIXED_STEP);
+  assert.equal(duel.phase, "running");
+  assert.equal(duel.players[0].eliminated, false);
+  assert.ok(duel.players[0].position.z < .5);
+  assert.ok(Math.abs(duel.radius - 7.55) < 1e-8);
+  for (let i = 0; i < 360 && duel.phase === "running"; i++) updateDuel(duel, FIXED_STEP);
   assert.equal(duel.phase, "finished");
   assert.equal(duel.winner, "Red");
 });
@@ -125,7 +130,7 @@ test("mask cells determine mass, centre, inertia, and actual overlap", () => {
   assert.equal(interceptSlope(duel.players[0].position, duel.players[1].position,
     duel.players[0].mass, duel.players[1].mass, 0, duel.radius), 0);
   assert.equal(interceptSlope(duel.players[1].position, duel.players[0].position,
-    duel.players[1].mass, duel.players[0].mass, 0, duel.radius), null);
+    duel.players[1].mass, duel.players[0].mass, 0, duel.radius) === 0, true);
   const path = safeTravelPath([{ x: 0, y: 0, z: .5 }, { x: 30, y: 0, z: .5 }], 1, duel.radius);
   assert.ok(Math.abs(path.at(-1).x - (duel.radius - .2)) < 1e-8);
 });

@@ -85,7 +85,7 @@ test("only the selected current-team character can fire, and damage waits for ar
   const preview = previewFor(round);
   assert.equal(firePreview(round, 0, preview), false);
   assert.equal(firePreview(round, 4, preview), false);
-  assert.ok(firePreview(round, 1, preview));
+  assert.ok(firePreview(round, 1, preview, .5)); // Keep this target on land for its next turn.
   assert.ok(round.players.every((p) => p.health === 100));
   for (let i = 0; i < 120; i += 1) updateRound(round, FIXED_STEP);
   assert.equal(round.players[4].health, 100);
@@ -95,7 +95,7 @@ test("only the selected current-team character can fire, and damage waits for ar
   assert.ok(round.players.filter((_, i) => i !== 4).every((p) => p.health === 100));
   assert.ok(round.players[4].velocity.x > 0);
   assert.equal(firePreview(round, 1, preview), false);
-  // The piercing bullet now continues to the boundary before the usual impact pause.
+  // The piercing bullet continues to the boundary, then waits only for settling.
   for (let i = 0; i < 160; i += 1) updateRound(round, FIXED_STEP);
   assert.equal(round.attack, null);
   assert.equal(round.currentTeam, 1);

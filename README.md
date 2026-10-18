@@ -32,6 +32,13 @@ npm start
 
 Open the printed local address. For a second device, run the server on a reachable host (`HOST=0.0.0.0`) and open that host's address on both devices; `localhost` only reaches the device itself. An old server process must be restarted after pulling changes.
 
+During local development, `npm start` checks files every second. Frontend changes
+reload open pages; backend and shared simulation changes restart the server and
+then reload pages. A backend restart clears local multiplayer rooms. Dependencies,
+generated output, hidden folders, and tests are ignored. Stop with Ctrl+C.
+Refresh is disabled when `NODE_ENV=production`, or when running on Render or Vercel.
+To run locally without refresh, use `NODE_ENV=production npm start`.
+
 ```sh
 npm test
 npm run build

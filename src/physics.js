@@ -93,6 +93,13 @@ export function applyImpulse(player, impulse) {
   player.velocity.y += impulse.y / player.mass;
 }
 
+export function playersAreStill(players, onPlatform = insideArena) {
+  return players.every((player) => player.eliminated ||
+    (onPlatform(player.position.x, player.position.y) && Math.abs(player.position.z - .5) < .02 &&
+      Math.hypot(player.velocity.x, player.velocity.y, player.velocity.z) < .12 &&
+      Math.abs(player.angularVelocity || 0) < .2));
+}
+
 export function applyKnockback(attacker, target, strength) {
   const dx = target.position.x - attacker.position.x;
   const dy = target.position.y - attacker.position.y;

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
+import { shotDirection } from "../src/aiming.js";
 import { createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES } from "../src/combat.js";
 import { takeFixedSteps } from "../src/physics.js";
 
@@ -27,7 +28,7 @@ async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, exp
     window: { addEventListener(name, fn) { windowEvents[name] = fn; } },
     createView: () => view, createVictoryScreen: () => ({ hide() {}, show() {} }),
     createEquationInput: () => ({ key: () => "0", preview: (origin, direction) => buildPreview("0", origin, direction) }),
-    readSavedMask: async () => null, chooseProjectileAction, buildPreview,
+    readSavedMask: async () => null, chooseProjectileAction, buildPreview, shotDirection,
     createRound, updateRound, firePreview, selectCharacter, TEAM_NAMES, takeFixedSteps, requestAnimationFrame() {},
     console: { info() {}, warn() {}, error: (...args) => errors.push(args) },
   });
