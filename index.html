@@ -15,6 +15,10 @@
     <main class="home">
       <div class="landscape" aria-hidden="true"></div>
       <div class="sky-shade" aria-hidden="true"></div>
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="Out-Mathed home"><span class="brand-mark" aria-hidden="true">∑</span> OUT-MATHED</a>
+        <button class="guide-trigger" id="guide-trigger" type="button">How to play <span aria-hidden="true">↗</span></button>
+      </header>
       <section class="hero" aria-labelledby="hero-title">
         <h1 id="hero-title">out-mathed</h1>
         <nav id="modes" class="mode-choices" aria-label="Choose a game mode">
@@ -29,5 +33,19 @@
         </nav>
       </section>
     </main>
+    <dialog class="guide" id="guide" aria-labelledby="guide-title">
+      <form method="dialog"><button class="guide-close" aria-label="Close how to play">×</button></form>
+      <h2 id="guide-title">How to play</h2>
+      <ol>
+        <li><strong>Choose a mode.</strong> Draw a character or use a starter character.</li>
+        <li><strong>Projectile Duel:</strong> Plot an equation, set the force, and fire at the other team.</li>
+        <li><strong>Bump Duel:</strong> Plot a path and knock your opponent off the arena.</li>
+      </ol>
+    </dialog>
+    <script>
+      const guide = document.querySelector('#guide');
+      document.querySelector('#guide-trigger').addEventListener('click', () => guide.showModal());
+      guide.addEventListener('click', (event) => { if (event.target === guide) guide.close(); });
+    </script>
   </body>
 </html>
