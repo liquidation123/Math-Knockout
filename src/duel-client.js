@@ -15,7 +15,7 @@ const view = createView($("#arena"), $("#hud"), $("#controls"), "bump");
 let mountainReady = false;
 let startupFailed = false, leaving = false;
 let socket;
-let state, previewLine, preview, lastKey = "", summitView = false;
+let state, previewLine, preview, lastKey = "", summitView = false, previewStarted = 0, lastCount = 0;
 function updateLoading() {
   // A loaded model alone is not enough: the server must assign a real side.
   $("#loading").hidden = mountainReady && !!state && !startupFailed;
@@ -30,7 +30,8 @@ function showConnectionError(message, error) {
   $("#side").textContent = "Connection unavailable";
   $("#phase").textContent = "Could not connect";
   $("#error").textContent = message;
-  for (const id of ["#equation", "#lock", "#reset", "#view"]) $(id).disabled = true;
+  for (const id of ["#equation", "#lock", "#reset", "#view", "#again"]) $(id).disabled = true;
+  document.querySelectorAll("[data-equation]").forEach((button) => { button.disabled = true; });
   console.error("Bump Duel:", message, error || "");
   socket?.close();
 }
@@ -77,10 +78,14 @@ function drawPreview() {
     if (!insideArena(point.x, point.y)) break;
     points.push(point);
   }
-  if (points.length > 1) previewLine = view.drawCurve([points], 0xffffff, true);
+  if (points.length > 1) {
+    previewLine = view.drawCurve([points], 0xffffff, true);
+    previewStarted = Date.now();
+  }
   const end = points.at(-1);
-  $("#location").textContent = end ? `Projected stop: (${end.x.toFixed(1)}, ${end.y.toFixed(1)})` : "No playable path";
-  $("#error").textContent = "Your opponent's hidden path may change the collision.";
+  const edge = end && !insideArena(end.x, end.y, .8);
+  $("#location").textContent = end ? `Landing ≈ (${end.x.toFixed(1)}, ${end.y.toFixed(1)})${edge ? " · near the edge!" : ""}` : "No playable path";
+  $("#error").textContent = edge ? "Careful: this path ends close to the fall edge." : "Your opponent's hidden path may change the collision.";
 }
 
 function updateScreen() {
@@ -95,9 +100,15 @@ function updateScreen() {
   $("#view").disabled = !mountainReady || players[side].eliminated;
   $("#reset").disabled = !mountainReady;
   $("#lock").textContent = locked[side] ? "Locked ✓" : "Lock in";
+  $("#result-screen").hidden = phase !== "finished";
+  document.querySelectorAll("[data-equation]").forEach((button) => { button.disabled = !canEdit; });
   if (phase === "planning" && locked[side]) $("#error").textContent = "Locked in. Waiting for the other player.";
   if (phase === "planning" && !locked[side]) drawPreview();
-  if (phase === "finished") $("#error").textContent = state.winner === "Draw" ? "Both players fell." : `${state.winner} stayed on the summit.`;
+  if (phase === "finished") {
+    const win = state.winner === (side === 0 ? "Blue" : "Red");
+    $("#result-title").textContent = state.winner === "Draw" ? "It's a draw" : win ? "You held the summit!" : "You fell from the summit";
+    $("#result-detail").textContent = state.winner === "Draw" ? "Both characters went over the edge." : `${state.winner} stayed on top. Try a new path and predict the collision.`;
+  }
 }
 
 socket?.addEventListener("message", ({ data }) => {
@@ -128,6 +139,10 @@ socket?.addEventListener("message", ({ data }) => {
     lastKey = "";
     if (previewLine) { view.removeCurve(previewLine); previewLine = null; }
   }
+  if (oldPhase !== "countdown" && state.phase === "countdown") {
+    view.setViewMode("follow");
+    summitView = false;
+  }
   if (state.phase === "running" && previewLine) { view.removeCurve(previewLine); previewLine = null; }
   updateScreen();
 });
@@ -136,18 +151,27 @@ socket?.addEventListener("close", (event) => showConnectionError(event.reason ||
 window.addEventListener("pagehide", () => { leaving = true; document.exitPointerLock?.(); socket?.close(); });
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 $("#equation").addEventListener("input", drawPreview);
+document.querySelectorAll("[data-equation]").forEach((button) => button.addEventListener("click", () => {
+  $("#equation").value = button.dataset.equation;
+  drawPreview();
+  $("#equation").focus();
+}));
 $("#form").addEventListener("submit", (event) => {
   event.preventDefault();
   drawPreview();
   if (!startupFailed && mountainReady && !preview?.error && state?.phase === "planning" && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "lock", expression: $("#equation").value }));
 });
-$("#reset").addEventListener("click", () => {
+function restart() {
   if (!startupFailed && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "reset" }));
-});
+}
+$("#reset").addEventListener("click", restart);
+$("#again").addEventListener("click", restart);
 $("#invite").addEventListener("click", async () => {
-  await navigator.clipboard.writeText(location.href);
-  $("#invite").textContent = "Copied!";
-  setTimeout(() => $("#invite").textContent = "Copy invite link", 1600);
+  try {
+    await navigator.clipboard.writeText(location.href);
+    $("#invite").textContent = "Link copied ✓";
+    setTimeout(() => $("#invite").textContent = "Invite friend ↗", 1600);
+  } catch { $("#error").textContent = "Copy failed. Share the URL in your address bar."; }
 });
 $("#view").addEventListener("click", () => {
   if (state?.players[state.side].eliminated) return;
@@ -161,7 +185,18 @@ function frame() {
     view.updateCharacterCamera(state.players, state.side);
     const left = Math.ceil((state.startAt - Date.now()) / 1000);
     $("#countdown").hidden = state.phase !== "countdown";
-    $("#countdown").textContent = Math.max(1, left);
+    const count = Math.max(1, left);
+    if (count !== lastCount) {
+      $("#countdown strong").textContent = count;
+      $("#countdown strong").style.animation = "none";
+      requestAnimationFrame(() => { $("#countdown strong").style.animation = ""; });
+      lastCount = count;
+    }
+  }
+  if (previewLine?.children?.[0]?.isLine) {
+    const line = previewLine.children[0];
+    const total = line.geometry.getAttribute("position").count;
+    line.geometry.setDrawRange(0, Math.max(2, Math.min(total, Math.floor((Date.now() - previewStarted) / 1400 * total))));
   }
   view.render();
   requestAnimationFrame(frame);

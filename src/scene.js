@@ -73,12 +73,14 @@ export function createView(container, hud, controls, mode = "projectile") {
   const birdCamera = createCamera();
   const summitCamera = new THREE.PerspectiveCamera(52, 1, 0.1, 160);
   summitCamera.up.set(0, 0, 1);
+  const followCamera = new THREE.PerspectiveCamera(62, 1, 0.1, 160);
+  followCamera.up.set(0, 0, 1);
   const characterCamera = new THREE.PerspectiveCamera(72, 1, 0.05, 160);
   characterCamera.up.set(0, 0, 1);
   let viewMode = mode === "bump" ? "character" : "map";
   let lookYaw = 0, lookPitch = 0, lookAtIndex = -1;
   const overviewCamera = () => viewMode === "map" ? birdCamera :
-    viewMode === "character" ? characterCamera : summitCamera;
+    viewMode === "character" ? characterCamera : viewMode === "follow" ? followCamera : summitCamera;
   const povCamera = createProjectileCamera();
   let activeCamera = overviewCamera();
   let cinematicMode = "bird";
@@ -89,7 +91,7 @@ export function createView(container, hud, controls, mode = "projectile") {
   let trailPoints = [];
   const effects = [];
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.localClippingEnabled = true;
@@ -245,7 +247,10 @@ export function createView(container, hud, controls, mode = "projectile") {
       mesh.visible = Boolean(player && !player.eliminated && !(viewMode === "character" && index === selectedIndex));
       if (!mesh.visible) return;
       const position = player.position;
-      mesh.position.set(position.x, position.y, position.z);
+      const target = new THREE.Vector3(position.x, position.y, position.z);
+      if (!mesh.userData.ready || mesh.position.distanceTo(target) > 4) mesh.position.copy(target);
+      else mesh.position.lerp(target, 0.35); // Smooth 20 Hz snapshots for display only.
+      mesh.userData.ready = true;
       mesh.material.color.setHex(player.team === 0 ? 0x76b7ff : 0xff8c99);
       if (mesh.userData.drawing) {
         mesh.userData.drawing.scale.setScalar(index === selectedIndex ? 1.12 : 1);
@@ -539,12 +544,13 @@ export function createView(container, hud, controls, mode = "projectile") {
     const height = container.clientHeight;
     const aspect = width / height;
     frameCamera(birdCamera, aspect, (hud.offsetHeight + 24) / height, (controls.offsetHeight + 24) / height);
-    const distance = Math.max(46, 40 / aspect);
+    const distance = Math.max(46, Math.min(58, 40 / aspect));
     summitCamera.position.set(0, -distance * 0.8, distance * 0.7);
     summitCamera.lookAt(0, 0, -5);
-    summitCamera.aspect = characterCamera.aspect = aspect;
+    summitCamera.aspect = characterCamera.aspect = followCamera.aspect = aspect;
     summitCamera.updateProjectionMatrix();
     characterCamera.updateProjectionMatrix();
+    followCamera.updateProjectionMatrix();
     povCamera.aspect = aspect;
     povCamera.updateProjectionMatrix();
     renderer.setSize(width, height);
@@ -555,6 +561,7 @@ export function createView(container, hud, controls, mode = "projectile") {
   resize();
 
   function setViewMode(mode) {
+    if (mode === "follow" && viewMode !== "follow") followCamera.position.copy(characterCamera.position);
     viewMode = mode;
     if (mode === "character") lookAtIndex = -1;
     if (document.pointerLockElement === renderer.domElement && mode !== "character") document.exitPointerLock();
@@ -562,13 +569,20 @@ export function createView(container, hud, controls, mode = "projectile") {
   }
 
   function updateCharacterCamera(players, selectedIndex) {
-    if (viewMode !== "character" || selectedIndex == null) return;
+    if ((viewMode !== "character" && viewMode !== "follow") || selectedIndex == null) return;
     const player = players[selectedIndex];
     if (!player || player.eliminated) return;
     if (lookAtIndex !== selectedIndex) {
       lookAtIndex = selectedIndex;
       lookYaw = player.team === 0 ? 0 : Math.PI;
       lookPitch = -0.06;
+    }
+    if (viewMode === "follow") {
+      const facing = player.team === 0 ? 1 : -1;
+      followCamera.position.lerp(new THREE.Vector3(player.position.x - facing * 5,
+        player.position.y - 3, player.position.z + 3.4), 0.075);
+      followCamera.lookAt(player.position.x + facing * 1.6, player.position.y, player.position.z + .4);
+      return;
     }
     characterCamera.position.set(player.position.x, player.position.y, player.position.z + 0.65);
     characterCamera.lookAt(

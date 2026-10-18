@@ -13,17 +13,19 @@
     <section id="arena" aria-label="3D mountain duel"></section>
     <div id="loading" role="status"><span id="loading-message">Connecting to the duel server…</span> <button id="retry" hidden>Retry</button></div>
     <header id="hud" class="panel">
-      <div class="brand"><h1>BUMP DUEL <span>OUT-MATHED</span></h1><a class="mode-link" href="/">Change mode</a><button id="invite">Copy invite link</button></div>
+      <div class="brand"><h1>out-mathed <span>/ BUMP DUEL</span></h1><a class="mode-link" href="/">Change mode</a><strong id="phase">Connecting…</strong><button id="invite" type="button">Invite friend ↗</button></div>
       <p class="character-note" id="character-note">Playing with the starter character · <a href="/create.html?mode=bump">Draw your own</a></p>
-      <div class="score"><span id="blue">Blue · waiting</span><strong id="phase">Connecting…</strong><span id="red">Red · waiting</span></div>
+      <div class="score"><span id="blue">Blue · waiting</span><span id="round-hint">Hidden choices · simultaneous launch</span><span id="red">Red · waiting</span></div>
     </header>
-    <div id="countdown" aria-live="assertive" hidden>3</div>
-    <section id="controls" class="panel">
-      <div class="control-top"><strong id="side">Finding your side…</strong><span id="location">The dotted line is your path if unobstructed.</span></div>
-      <form id="form"><label for="equation">y =</label><input id="equation" value="0" maxlength="200" autocomplete="off" spellcheck="false" disabled><button id="lock" type="submit" disabled>Lock in</button></form>
-      <div class="control-bottom"><span id="error" role="status">Both players choose secretly, then launch together.</span><button id="view" disabled>Summit view</button><button id="reset" disabled>New duel</button></div>
-      <p class="bump-help">Copy the invite into a second tab. Equations move characters, not bullets; contact knocks rivals off. Stone walls stop launches. Click the arena to look around; Esc releases the mouse.</p>
+    <div id="countdown" aria-live="assertive" hidden><small>Both paths are locked</small><strong>3</strong><small>Get ready to launch</small></div>
+    <section id="controls" class="panel" aria-label="Equation launcher">
+      <div class="control-top"><strong id="side">Finding your side…</strong><span id="location">Your dotted path shows the unobstructed landing point.</span></div>
+      <form id="form"><label for="equation">y =</label><input id="equation" value="0" maxlength="200" autocomplete="off" spellcheck="false" aria-describedby="error location" disabled><button id="lock" type="submit" disabled>Lock path →</button></form>
+      <div class="examples" aria-label="Example equations"><span>TRY</span><button type="button" data-equation="0">straight</button><button type="button" data-equation="0.35*x">diagonal</button><button type="button" data-equation="2*sin(x/3)">wave</button><button type="button" data-equation="x^2/12">arc</button></div>
+      <div class="control-bottom"><span id="error" role="status">Choose a path. Your opponent cannot see it.</span><button id="view" type="button" disabled>Summit view</button><button id="reset" type="button" disabled>Restart</button></div>
+      <p class="bump-help">Contact knocks rivals off. Stone walls stop launches. Click the arena to look around; Esc releases the mouse.</p>
     </section>
+    <section id="result-screen" class="result panel" hidden><small>ROUND COMPLETE</small><h2 id="result-title">Blue wins</h2><p id="result-detail"></p><button id="again" type="button">Play again →</button></section>
   </main>
   <script type="module">
     document.querySelector("#retry").addEventListener("click", () => location.reload());
