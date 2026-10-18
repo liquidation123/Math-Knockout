@@ -1,5 +1,8 @@
 import { buildPreview } from "./equations.js";
-import { ARENA, GROUND_FRICTION, PLAYER_SIZE, applyImpulse, createPlayer, insideArena, movePlayerXY, updatePlayer } from "./physics.js";
+import { ARENA, PLAYER_SIZE, applyImpulse, createPlayer, insideArena, movePlayerXY, updatePlayer } from "./physics.js";
+
+const LAUNCH_SPEED = 7.5;
+const LAUNCH_FRICTION = 2.25; // Distance = speed²/(2·friction) = 12.5 units.
 
 export function createDuel() {
   return {
@@ -14,7 +17,7 @@ export function lockEquation(duel, side, expression) {
   const preview = buildPreview(expression, player.position, side === 0 ? 1 : -1);
   if (preview.error) return preview.error;
   if (preview.path.length < 2) return "Choose a path with room to move.";
-  duel.paths[side] = { points: preview.path, index: 0, speed: 10, expression };
+  duel.paths[side] = { points: preview.path, index: 0, speed: LAUNCH_SPEED, expression };
   duel.locked[side] = true;
   return "";
 }
@@ -26,7 +29,7 @@ export function launchDuel(duel) {
   return true;
 }
 
-export function travelPath(points, distanceLimit = 12.5) {
+export function travelPath(points, distanceLimit = LAUNCH_SPEED ** 2 / (2 * LAUNCH_FRICTION)) {
   const visible = [points[0]];
   let distanceLeft = distanceLimit;
   for (let i = 1; i < points.length && distanceLeft > 0; i++) {
@@ -67,8 +70,8 @@ function followPath(player, path, dt) {
   }
   player.velocity.x = (player.position.x - start.x) / dt;
   player.velocity.y = (player.position.y - start.y) / dt;
-  // Friction limits travel to about speed²/(2·friction) = 12.5 units.
-  path.speed = Math.max(0, path.speed - GROUND_FRICTION * dt);
+  // The dotted preview uses this same friction-limited distance.
+  path.speed = Math.max(0, path.speed - LAUNCH_FRICTION * dt);
   if (!path.speed) { player.velocity.x = 0; player.velocity.y = 0; path.done = true; }
   // Once a path leaves the playable top, gravity takes over with its last velocity.
   if (!insideArena(player.position.x, player.position.y) || path.index >= path.points.length - 1) {
@@ -88,7 +91,7 @@ function collide(duel) {
   if (closing <= 0) return;
   duel.paths.forEach((path) => { path.done = true; });
   // Equal-and-opposite impulses preserve momentum; boosted force makes edge knockouts possible.
-  const impulse = 3.5 * closing / (1 / a.mass + 1 / b.mass);
+  const impulse = 4.7 * closing / (1 / a.mass + 1 / b.mass);
   applyImpulse(a, { x: -nx * impulse, y: -ny * impulse });
   applyImpulse(b, { x: nx * impulse, y: ny * impulse });
   const overlap = (touchDistance - distance) / 2;

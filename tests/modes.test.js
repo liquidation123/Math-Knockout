@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { createMountain } from "../src/mountain.js";
 import { arenaOutline, clipArenaSegment, clipCurveSections, insideArena } from "../src/terrain.js";
 import { ARENA, FIXED_STEP, OBSTACLES, createPlayer, updatePlayer } from "../src/physics.js";
@@ -42,7 +43,7 @@ test("shared mountain uses the branch asset, lighting, and exact stone collision
     await createMountain(scene);
   } finally { GLTFLoader.prototype.load = original; }
   assert.equal(asset, "/assets/mountain.glb");
-  assert.equal(scene.background.getHex(), 0x72c5f5);
+  assert.equal(scene.background, null); // Transparent renderer shows the CSS sky.
   assert.ok(scene.children.some((object) => object.isHemisphereLight && object.intensity === 1.5));
   assert.ok(scene.children.some((object) => object.isDirectionalLight && object.intensity === 2.3));
   const blocks = scene.children.filter((object) => object.isMesh);
@@ -63,14 +64,22 @@ test("physics rim matches the actual GLB grass mesh, not its rectangular boundin
   const accessor = gltf.accessors[mesh.primitives[0].attributes.POSITION];
   assert.equal(accessor.componentType, 5126); // Float32 positions in the GLB binary chunk.
   const buffer = gltf.bufferViews[accessor.bufferView];
-  const offset = 28 + jsonSize + buffer.byteOffset + (accessor.byteOffset || 0);
+  const compression = buffer.extensions.EXT_meshopt_compression;
+  await MeshoptDecoder.ready;
+  const decoded = new Uint8Array(compression.count * compression.byteStride);
+  const binaryStart = 28 + jsonSize;
+  MeshoptDecoder.decodeGltfBuffer(decoded, compression.count, compression.byteStride,
+    bytes.subarray(binaryStart + compression.byteOffset,
+      binaryStart + compression.byteOffset + compression.byteLength), compression.mode, compression.filter);
+  const positions = new DataView(decoded.buffer);
   const vertices = Array.from({ length: accessor.count }, (_, index) => {
-    const start = offset + index * (buffer.byteStride || 12);
-    return { x: bytes.readFloatLE(start), y: -bytes.readFloatLE(start + 8), z: bytes.readFloatLE(start + 4) };
+    const start = index * compression.byteStride + (accessor.byteOffset || 0);
+    return { x: positions.getFloat32(start, true), y: -positions.getFloat32(start + 8, true), z: positions.getFloat32(start + 4, true) };
   });
   assert.ok(vertices.every((point) => Math.abs(point.z) < 1e-7));
   for (const point of arenaOutline()) {
-    assert.ok(vertices.some((vertex) => Math.hypot(vertex.x - point.x, vertex.y - point.y) < 1e-5));
+    // Meshopt quantizes positions to about 0.004 world units in this export.
+    assert.ok(vertices.some((vertex) => Math.hypot(vertex.x - point.x, vertex.y - point.y) < 0.005));
     assert.ok(insideArena(point.x, point.y));
     assert.equal(insideArena(point.x * 1.001, point.y * 1.001), false);
   }

@@ -39,7 +39,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   }
   runInNewContext(source, {
     URL, location: new URL(pageUrl),
-    document: { querySelector: element }, window: { addEventListener(name, handler) { windowEvents[name] = handler; } },
+    document: { querySelector: element, querySelectorAll: () => [] }, window: { addEventListener(name, handler) { windowEvents[name] = handler; } },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
     buildPreview, travelPath, insideArena, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame() {},
     console: { error: (...args) => errors.push(args) },

@@ -26,6 +26,9 @@ with the same room ID; plain `/play.html` always starts Projectile Duel.
 
 Both modes use `assets/mountain.glb`, its painted materials, cliff, foliage,
 clouds and ruins, plus the same warm lighting in `src/mountain.js`.
+The editable `assets/mountain.blend` and `tools/build_mountain.py` generate the
+browser model. WebP textures and Meshopt geometry compression keep the GLB near
+1 MB; `build.js` ships only runtime images and the GLB, not the Blender source.
 The 96-point grass rim is reused by `src/terrain.js` for ground support, falls,
 curve/grid clipping, and projectile edge collisions. The top is flat at Z=0;
 Z remains height. A character's centre leaving the rim loses support, as before.
@@ -34,8 +37,9 @@ Lower cliff surfaces and the decorative outer rim are scenery, not landable grou
 The original projectile collision boxes now appear as stone barriers in both
 modes, with exactly matching dimensions. Bump launches now stop at these solid
 barriers instead of passing through them; after contact knockback, characters
-also collide with the barriers. This terrain adaptation does not change launch
-speed, friction, contact impulse strength, bullet speed/damage, Force or recoil.
+also collide with the barriers. Projectile Duel's bullet speed/damage, Force and
+recoil are unchanged. Bump Duel's launch is slower (7.5 units/s with 2.25
+units/s² friction) while retaining the same 12.5-unit unobstructed distance.
 Bump's dotted path is still an unobstructed projection; a wall or rival can stop
 or alter actual travel.
 
