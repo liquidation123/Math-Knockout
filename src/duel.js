@@ -1,13 +1,17 @@
 import { buildPreview } from "./equations.js";
-import { ARENA, PLAYER_SIZE, applyImpulse, createPlayer, insideArena, movePlayerXY, updatePlayer } from "./physics.js";
+import { ARENA, OBSTACLES, PLAYER_SIZE, applyImpulse, createPlayer, movePlayerXY, updatePlayer } from "./physics.js";
 
 const LAUNCH_SPEED = 7.5;
 const LAUNCH_FRICTION = 2.25; // Distance = speed²/(2·friction) = 12.5 units.
+export const DUEL_RADIUS = 7.5;
+export const travelDistance = (mass = 1) => LAUNCH_SPEED ** 2 / (2 * LAUNCH_FRICTION * mass);
+export const insideDuel = (x, y, radius) => Math.hypot(x, y) < radius;
 
 export function createDuel() {
   return {
-    players: [createPlayer("Blue", -9.5, 0, 0.5, 0), createPlayer("Red", 9.5, 0, 0.5, 1)],
+    players: [createPlayer("Blue", -5.6, 0, 0.5, 0), createPlayer("Red", 5.6, 0, 0.5, 1)],
     paths: [null, null], locked: [false, false], phase: "planning", elapsed: 0, winner: null,
+    round: 1, radius: DUEL_RADIUS,
   };
 }
 
@@ -17,7 +21,8 @@ export function lockEquation(duel, side, expression) {
   const preview = buildPreview(expression, player.position, side === 0 ? 1 : -1);
   if (preview.error) return preview.error;
   if (preview.path.length < 2) return "Choose a path with room to move.";
-  duel.paths[side] = { points: preview.path, index: 0, speed: LAUNCH_SPEED, expression };
+  // Equal launch energy: heavier drawings start slower and travel less far.
+  duel.paths[side] = { points: preview.path, index: 0, speed: LAUNCH_SPEED / Math.sqrt(player.mass), expression };
   duel.locked[side] = true;
   return "";
 }
@@ -29,7 +34,7 @@ export function launchDuel(duel) {
   return true;
 }
 
-export function travelPath(points, distanceLimit = LAUNCH_SPEED ** 2 / (2 * LAUNCH_FRICTION)) {
+export function travelPath(points, distanceLimit = travelDistance()) {
   const visible = [points[0]];
   let distanceLeft = distanceLimit;
   for (let i = 1; i < points.length && distanceLeft > 0; i++) {
@@ -46,7 +51,7 @@ export function travelPath(points, distanceLimit = LAUNCH_SPEED ** 2 / (2 * LAUN
   return visible;
 }
 
-function followPath(player, path, dt) {
+function followPath(player, path, dt, radius, obstacles) {
   let remaining = path.speed * dt;
   const start = { ...player.position };
   while (remaining > 0 && path.index < path.points.length - 1) {
@@ -57,7 +62,7 @@ function followPath(player, path, dt) {
     if (distance > 0) {
       const before = { ...player.position };
       const moveX = dx * step / distance, moveY = dy * step / distance;
-      movePlayerXY(player, moveX, moveY);
+      movePlayerXY(player, moveX, moveY, obstacles);
       if (Math.abs(player.position.x - before.x - moveX) > 1e-8 ||
         Math.abs(player.position.y - before.y - moveY) > 1e-8) {
         path.done = true;
@@ -74,7 +79,7 @@ function followPath(player, path, dt) {
   path.speed = Math.max(0, path.speed - LAUNCH_FRICTION * dt);
   if (!path.speed) { player.velocity.x = 0; player.velocity.y = 0; path.done = true; }
   // Once a path leaves the playable top, gravity takes over with its last velocity.
-  if (!insideArena(player.position.x, player.position.y) || path.index >= path.points.length - 1) {
+  if (!insideDuel(player.position.x, player.position.y, radius) || path.index >= path.points.length - 1) {
     path.done = true;
   }
 }
@@ -84,7 +89,7 @@ function collide(duel) {
   if (a.eliminated || b.eliminated || Math.abs(a.position.z - b.position.z) > PLAYER_SIZE) return;
   const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y;
   const distance = Math.hypot(dx, dy);
-  const touchDistance = (a.radius || PLAYER_SIZE / 2) + (b.radius || PLAYER_SIZE / 2);
+  const touchDistance = 1.35 * ((a.radius || PLAYER_SIZE / 2) + (b.radius || PLAYER_SIZE / 2));
   if (distance >= touchDistance) return;
   const nx = distance ? dx / distance : 1, ny = distance ? dy / distance : 0;
   const closing = (a.velocity.x - b.velocity.x) * nx + (a.velocity.y - b.velocity.y) * ny;
@@ -102,10 +107,11 @@ function collide(duel) {
 export function updateDuel(duel, dt) {
   if (duel.phase !== "running") return;
   duel.elapsed += dt;
+  const obstacles = duel.round >= 3 ? OBSTACLES.slice(0, 2) : [];
   duel.players.forEach((player, side) => {
     const path = duel.paths[side];
-    if (!path.done) followPath(player, path, dt);
-    if (path.done) updatePlayer(player, dt);
+    if (!path.done) followPath(player, path, dt, duel.radius, obstacles);
+    if (path.done) updatePlayer(player, dt, obstacles, (x, y) => insideDuel(x, y, duel.radius));
     if (player.position.z < ARENA.fallHeight) player.eliminated = true;
   });
   collide(duel);
@@ -115,6 +121,8 @@ export function updateDuel(duel, dt) {
     duel.winner = alive.length ? alive[0].name : "Draw";
   } else if (duel.elapsed > 8) {
     duel.phase = "planning";
+    duel.round += 1;
+    duel.radius = Math.max(4.5, DUEL_RADIUS - (duel.round - 1) * 1.3);
     duel.paths = [null, null];
     duel.locked = [false, false];
     duel.players.forEach((player) => { player.velocity.x = 0; player.velocity.y = 0; });

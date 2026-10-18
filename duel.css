@@ -13,14 +13,10 @@ canvas { display: block; width: 100%; height: 100%; }
 #hud { top: 16px; }
 .brand, .score, .control-top, .control-bottom, form, .examples { display: flex; align-items: center; gap: 12px; }
 .brand { justify-content: space-between; }
-.brand h1 { margin: 0; font-size: 21px; letter-spacing: -.055em; white-space: nowrap; }
-.brand h1 span { color: #5b8ba7; font-size: 10px; letter-spacing: .09em; vertical-align: middle; margin-left: 5px; }
-.mode-link { color: #346681; font-size: 11px; white-space: nowrap; }
-#phase { color: #236b91; font-size: 12px; text-align: center; }
-.character-note { margin: 5px 0 0; color: #7891a0; font-size: 11px; }
-.character-note a { color: #2576a3; }
-.score { justify-content: space-between; border-top: 1px solid #e1eaed; margin-top: 8px; padding-top: 8px; font-size: 12px; font-weight: 700; }
-#blue { color: #247dc3; } #red { color: #dc5b62; } #round-hint { color: #8ca1a9; font-size: 10px; font-weight: 500; }
+.brand h1 { margin: 0; font-size: 27px; letter-spacing: -.055em; white-space: nowrap; }
+.brand h1 a { color: inherit; text-decoration: none; }
+.score { justify-content: space-between; border-top: 1px solid #e1eaed; margin-top: 10px; padding-top: 10px; font-size: 16px; font-weight: 750; }
+#blue { color: #247dc3; } #red { color: #dc5b62; } #stage { color: #547589; font-size: 13px; }
 #controls { bottom: 18px; }
 .control-top, .control-bottom { justify-content: space-between; }
 .control-top strong { color: #1b577b; font-size: 14px; }
@@ -57,8 +53,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #69b6ed; outline-
 .result p { color: #587487; } .result button { margin-top: 12px; }
 @media (max-width: 680px) {
   .panel { padding: 11px; width: calc(100% - 24px); }
-  .brand h1 { font-size: 18px; } .brand h1 span, #round-hint, .control-top span { display: none; }
-  #phase { font-size: 11px; } #invite { padding: 7px; font-size: 10px; }
+  .brand h1 { font-size: 20px; } .control-top span { display: none; }
+  .score { font-size: 12px; } #stage { font-size: 10px; } #invite { padding: 7px; font-size: 10px; }
   #equation { font-size: 17px; } #lock { padding: 9px; }
   .control-bottom span { display: none; }
 }

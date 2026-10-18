@@ -27,9 +27,10 @@ test("homepage offers both modes, with separate entry points and relevant contro
   assert.match(projectile, /location\.replace\("\/bump\.html" \+ location\.search\)/);
   assert.match(bump, /src\/duel-client\.js/);
   assert.doesNotMatch(bump, /id="force"|id="fire"|src\/main\.js/);
-  for (const page of [projectile, bump]) assert.match(page, /href="\/">Change mode/);
+  assert.match(projectile, /href="\/">Change mode/);
+  assert.match(bump, /<a href="\/">out-mathed<\/a>/);
   const drawing = await source("create.js");
-  assert.match(drawing, /mode === 'bump' \? '\/bump\.html' : '\/play\.html'/);
+  assert.match(drawing, /mode === 'bump' \? `\/bump\.html/);
   assert.match(await source("src/scene.js"), /createMountain\(scene\)/);
   assert.match(await source("src/duel-client.js"), /createView\(.+, "bump"\)/);
 });
@@ -132,11 +133,12 @@ test("Projectile Duel has no contact damage or contact impulse", () => {
 
 test("Bump Duel keeps contact knockback without projectile damage and stops at stone walls", () => {
   const duel = createDuel();
-  duel.players[0].position = { x: -7, y: 4, z: 0.5 };
-  duel.players[1].position = { x: 7, y: 4, z: 0.5 };
+  duel.round = 3; // Ruins enter the arena only from the third launch.
+  duel.players[0].position = { x: -4, y: -3, z: 0.5 };
+  duel.players[1].position = { x: 4, y: -3, z: 0.5 };
   lockEquation(duel, 0, "0"); lockEquation(duel, 1, "0"); launchDuel(duel);
   for (let tick = 0; tick < 180; tick += 1) updateDuel(duel, FIXED_STEP);
-  assert.ok(Math.abs(duel.players[0].position.x + 4.5) < 1e-8);
+  assert.ok(Math.abs(duel.players[0].position.x + 2.4) < 1e-8);
   assert.equal(duel.paths[0].done, true);
   assert.ok(duel.players.every((player) => player.health === 100));
   const collision = createDuel();

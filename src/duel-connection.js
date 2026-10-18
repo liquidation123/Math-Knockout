@@ -12,6 +12,10 @@ export function duelSocketUrl(pageUrl, serverUrl = BUMP_SERVER_URL) {
     throw new Error("An HTTPS website needs a secure wss:// Bump Duel server.");
   }
   server.hash = "";
-  server.searchParams.set("room", page.searchParams.get("room") || "");
+  if (page.searchParams.get("quick") === "1") {
+    server.searchParams.delete("room");
+    server.searchParams.set("quick", "1");
+  }
+  else server.searchParams.set("room", page.searchParams.get("room") || "");
   return server.href;
 }

@@ -5,8 +5,8 @@ import { once } from "node:events";
 import WebSocket from "ws";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-async function waitUntil(check) {
-  const deadline = Date.now() + 6000;
+async function waitUntil(check, timeout = 6000) {
+  const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const result = check();
     if (result) return result;
@@ -15,7 +15,7 @@ async function waitUntil(check) {
   throw new Error("Timed out waiting for the local duel server.");
 }
 
-test("mode pages load; Bump restart cancels old countdowns and an empty room starts fresh", { timeout: 15000 }, async (t) => {
+test("mode pages, room resets, and Quick Match bot work on the local server", { timeout: 30000 }, async (t) => {
   const child = spawn(process.execPath, ["server.js"], {
     cwd: new URL("../", import.meta.url), env: { ...process.env, HOST: "127.0.0.1", PORT: "0" },
   });
@@ -33,8 +33,8 @@ test("mode pages load; Bump restart cancels old countdowns and an empty room sta
     assert.equal((await fetch(address + path)).status, 200, path);
   }
   const clients = [];
-  function connect() {
-    const socket = new WebSocket(address.replace("http:", "ws:") + "/?room=integration-test");
+  function connect(query = "room=integration-test") {
+    const socket = new WebSocket(address.replace("http:", "ws:") + "/?" + query);
     const client = { socket, state: null, shapes: [] };
     clients.push(client);
     socket.on("message", (bytes) => {
@@ -92,4 +92,20 @@ test("mode pages load; Bump restart cancels old countdowns and an empty room sta
   assert.deepEqual(fresh.state.locked, [false, false]);
   assert.deepEqual(fresh.state.players.map((player) => player.position), initialPositions);
   assert.ok(fresh.state.players.every((player) => player.health === 100 && player.mass === 1));
+  fresh.socket.close();
+  await once(fresh.socket, "close");
+
+  const pairedA = connect("quick=1"), pairedB = connect("quick=1");
+  await waitUntil(() => pairedA.state && pairedB.state);
+  assert.equal(pairedA.state.room, pairedB.state.room);
+  assert.equal(pairedB.state.side, 1);
+  pairedA.socket.close(); pairedB.socket.close();
+  await Promise.all([once(pairedA.socket, "close"), once(pairedB.socket, "close")]);
+
+  const solo = connect("quick=1");
+  await waitUntil(() => solo.state?.bot, 12000);
+  assert.equal(solo.state.side, 0);
+  solo.socket.send(JSON.stringify({ type: "lock", expression: "x/2" }));
+  await waitUntil(() => solo.state?.phase === "finished", 12000);
+  assert.ok(["Blue", "Red", "Draw"].includes(solo.state.winner));
 });

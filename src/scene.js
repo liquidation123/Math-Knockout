@@ -93,6 +93,12 @@ export function createView(container, hud, controls, mode = "projectile") {
   const effects = [];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  const dotCanvas = document.createElement("canvas");
+  dotCanvas.width = dotCanvas.height = 32;
+  const dotBrush = dotCanvas.getContext("2d");
+  dotBrush.fillStyle = "white";
+  dotBrush.beginPath(); dotBrush.arc(16, 16, 15, 0, Math.PI * 2); dotBrush.fill();
+  const dotTexture = new THREE.CanvasTexture(dotCanvas);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -119,6 +125,20 @@ export function createView(container, hud, controls, mode = "projectile") {
   });
 
   const ready = createMountain(scene);
+  const duelDisk = new THREE.Mesh(new THREE.CircleGeometry(1, 96),
+    new THREE.MeshBasicMaterial({ color: 0xf0ff8c, transparent: true, opacity: .09, depthWrite: false }));
+  const duelRim = new THREE.Mesh(new THREE.RingGeometry(.989, 1.011, 96),
+    new THREE.MeshBasicMaterial({ color: 0xfff1ae, transparent: true, opacity: .95, depthWrite: false, side: THREE.DoubleSide }));
+  duelDisk.position.z = .035; duelRim.position.z = .08;
+  duelDisk.visible = duelRim.visible = mode === "bump";
+  scene.add(duelDisk, duelRim);
+  if (mode === "bump") scene.userData.stones.count = 0;
+  function setDuelRound(round, radius) {
+    if (mode !== "bump") return;
+    duelDisk.scale.set(radius, radius, 1);
+    duelRim.scale.set(radius, radius, 1);
+    scene.userData.stones.count = round >= 3 ? 24 : 0;
+  }
 
   const gridLines = new THREE.LineSegments(
     new THREE.BufferGeometry(),
@@ -315,7 +335,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     texture.magFilter = THREE.NearestFilter;
     const drawing = new THREE.Group();
     const aspect = width / height;
-    const art = new THREE.Mesh(new THREE.PlaneGeometry(3.1 * Math.min(aspect, 1), 3.1 / Math.max(aspect, 1)),
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(3.8 * Math.min(aspect, 1), 3.8 / Math.max(aspect, 1)),
       new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.01, depthWrite: false, side: THREE.DoubleSide }));
     drawing.add(art);
     mesh.add(drawing);
@@ -516,6 +536,34 @@ export function createView(container, hud, controls, mode = "projectile") {
 
   function drawCurve(sections, color, preview = false) {
     const group = new THREE.Group();
+    if (preview === "duel") {
+      const positions = [];
+      for (const points of clipCurveSections(sections)) {
+        let next = 0;
+        for (let i = 1; i < points.length; i++) {
+          const a = points[i - 1], b = points[i];
+          const length = Math.hypot(b.x - a.x, b.y - a.y);
+          if (length < 1e-6) continue;
+          while (next <= length) {
+            positions.push(new THREE.Vector3(a.x + (b.x - a.x) * next / length,
+              a.y + (b.y - a.y) * next / length, .25));
+            next += .7;
+          }
+          next -= length;
+        }
+      }
+      const geometry = new THREE.BufferGeometry().setFromPoints(positions);
+      geometry.setDrawRange(0, 0);
+      const dots = new THREE.Points(geometry,
+        new THREE.PointsMaterial({ color, map: dotTexture, size: 14, sizeAttenuation: false,
+          transparent: true, alphaTest: .1, depthTest: false, depthWrite: false }));
+      dots.userData.total = positions.length;
+      dots.frustumCulled = false;
+      dots.renderOrder = 5;
+      group.add(dots);
+      scene.add(group);
+      return group;
+    }
     for (const points of clipCurveSections(sections)) {
       const geometry = new THREE.BufferGeometry().setFromPoints(
         points.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
@@ -602,6 +650,7 @@ export function createView(container, hud, controls, mode = "projectile") {
 
   return {
     ready,
+    setDuelRound,
     setViewMode,
     updateCharacterCamera,
     setPlayerShape,
@@ -621,8 +670,6 @@ export function createView(container, hud, controls, mode = "projectile") {
     createImpact,
     updateEffects,
     render: () => {
-      // Painted distant sky is a backdrop; hide its flat cards during free orbit.
-      scene.userData.atmosphere?.forEach((card) => { card.visible = activeCamera !== gizmo.camera; });
       playerMeshes.forEach((mesh) => {
         if (!mesh.userData.drawing) return;
         mesh.userData.drawing.quaternion.copy(activeCamera.quaternion);

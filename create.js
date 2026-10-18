@@ -48,8 +48,9 @@ if (typeof document !== 'undefined') {
   const undo = document.querySelector('#undo');
   const clear = document.querySelector('#clear');
   const arena = document.querySelector('#arena-link');
-  const mode = new URLSearchParams(window.location?.search || '').get('mode');
-  arena.href = mode === 'bump' ? '/bump.html' : '/play.html';
+  const params = new URLSearchParams(window.location?.search || '');
+  const mode = params.get('mode');
+  arena.href = mode === 'bump' ? `/bump.html${params.has('quick') ? '?quick=1' : ''}` : '/play.html';
   arena.textContent = mode === 'bump' ? 'Start Bump Duel →' : 'Start Projectile Duel →';
   const history = [];
   let tool = 'pencil';

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDuel, lockEquation, launchDuel, travelPath, updateDuel } from "../src/duel.js";
+import { createDuel, insideDuel, lockEquation, launchDuel, travelDistance, travelPath, updateDuel } from "../src/duel.js";
 import { FIXED_STEP } from "../src/physics.js";
 
 function run(blue, red) {
@@ -55,4 +55,20 @@ test("an invalid equation cannot lock or launch", () => {
 test("preview stops at the same friction-limited travel distance", () => {
   const points = travelPath([{ x: 0, y: 0, z: 0.5 }, { x: 20, y: 0, z: 0.5 }]);
   assert.equal(points.at(-1).x, 12.5);
+});
+
+test("heavier drawings launch slower, and each round tightens the circular boundary", () => {
+  const duel = createDuel();
+  duel.players[0].mass = 2;
+  assert.equal(travelDistance(2), travelDistance(1) / 2);
+  assert.ok(insideDuel(0, 7, duel.radius));
+  assert.equal(insideDuel(7, 7, duel.radius), false);
+  lockEquation(duel, 0, "3*x"); lockEquation(duel, 1, "-3*x"); launchDuel(duel);
+  assert.ok(duel.paths[0].speed < duel.paths[1].speed);
+  duel.paths.forEach((path) => { path.done = true; });
+  duel.elapsed = 8;
+  updateDuel(duel, FIXED_STEP);
+  assert.equal(duel.phase, "planning");
+  assert.equal(duel.round, 2);
+  assert.equal(duel.radius, 6.2);
 });

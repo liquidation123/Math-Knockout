@@ -14,9 +14,8 @@
     <section id="arena" aria-label="3D mountain duel"></section>
     <div id="loading" role="status"><span id="loading-message">Connecting to the duel server…</span> <button id="retry" hidden>Retry</button></div>
     <header id="hud" class="panel">
-      <div class="brand"><h1>out-mathed <span>/ BUMP DUEL</span></h1><a class="mode-link" href="/">Change mode</a><strong id="phase">Connecting…</strong><button id="invite" type="button">Invite friend ↗</button></div>
-      <p class="character-note" id="character-note">Playing with the starter character · <a href="/create.html?mode=bump">Draw your own</a></p>
-      <div class="score"><span id="blue">Blue · waiting</span><span id="round-hint">Hidden choices · simultaneous launch</span><span id="red">Red · waiting</span></div>
+      <div class="brand"><h1><a href="/">out-mathed</a></h1><button id="invite" type="button">Invite friend ↗</button></div>
+      <div class="score"><span id="blue">Blue · waiting</span><span id="stage">Round 1</span><span id="red">Red · waiting</span></div>
     </header>
     <div id="countdown" aria-live="assertive" hidden><small>Both paths are locked</small><strong>3</strong><small>Get ready to launch</small></div>
     <section id="controls" class="panel" aria-label="Equation launcher">
@@ -35,7 +34,6 @@
       document.querySelector("#loading-message").textContent = "Bump Duel could not start. Check the game dependencies with npm install, then retry.";
       document.querySelector("#retry").hidden = false;
       document.querySelector("#side").textContent = "No side assigned";
-      document.querySelector("#phase").textContent = "Could not start";
       console.error("Bump Duel initialization failed:", error);
     });
   </script>

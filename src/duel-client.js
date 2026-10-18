@@ -1,13 +1,12 @@
 import { buildPreview } from "./equations.js";
-import { travelPath } from "./duel.js";
-import { insideArena } from "./physics.js";
+import { insideDuel, travelDistance, travelPath } from "./duel.js";
 import { createView } from "./scene.js";
 import { readSavedMask } from "./saved-character.js";
 import { duelSocketUrl } from "./duel-connection.js";
 
 const $ = (selector) => document.querySelector(selector);
 const room = new URL(location.href);
-if (!room.searchParams.has("room")) {
+if (!room.searchParams.has("room") && room.searchParams.get("quick") !== "1") {
   room.searchParams.set("room", crypto.randomUUID().slice(0, 8));
   history.replaceState(null, "", room);
 }
@@ -28,7 +27,6 @@ function showConnectionError(message, error) {
   $("#loading-message").textContent = message;
   $("#retry").hidden = false;
   $("#side").textContent = "Connection unavailable";
-  $("#phase").textContent = "Could not connect";
   $("#error").textContent = "Offline";
   for (const id of ["#equation", "#lock", "#reset", "#view", "#again"]) $(id).disabled = true;
   document.querySelectorAll("[data-aim]").forEach((button) => { button.disabled = true; });
@@ -58,7 +56,6 @@ socket?.addEventListener("open", async () => {
     const mask = await readSavedMask();
     if (mask && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "shape", mask }));
-      $("#character-note").firstChild.textContent = "Your drawing is in the duel · ";
     }
   } catch { $("#error").textContent = "Saved drawing could not load; using a starter character."; }
 });
@@ -66,7 +63,7 @@ socket?.addEventListener("open", async () => {
 function drawPreview() {
   if (startupFailed || !state || state.side == null || state.phase !== "planning" || state.locked[state.side]) return;
   const player = state.players[state.side];
-  const key = $("#equation").value + player.position.x + "," + player.position.y;
+  const key = $("#equation").value + player.position.x + "," + player.position.y + "," + state.radius + "," + player.mass;
   if (key === lastKey) return;
   lastKey = key;
   preview = buildPreview($("#equation").value, player.position, state.side === 0 ? 1 : -1);
@@ -74,16 +71,16 @@ function drawPreview() {
   previewLine = null;
   if (preview.error) { $("#error").textContent = preview.error; return; }
   const points = [];
-  for (const point of travelPath(preview.path)) {
-    if (!insideArena(point.x, point.y)) break;
+  for (const point of travelPath(preview.path, travelDistance(player.mass))) {
+    if (!insideDuel(point.x, point.y, state.radius)) break;
     points.push(point);
   }
   if (points.length > 1) {
-    previewLine = view.drawCurve([points], 0xffffff, true);
+    previewLine = view.drawCurve([points], 0xff2846, "duel");
     previewStarted = Date.now();
   }
   const end = points.at(-1);
-  const edge = end && !insideArena(end.x, end.y, .8);
+  const edge = end && !insideDuel(end.x, end.y, state.radius - .8);
   $("#location").textContent = end ? `Landing ≈ (${end.x.toFixed(1)}, ${end.y.toFixed(1)})${edge ? " · near the edge!" : ""}` : "No playable path";
   $("#error").textContent = edge ? "Near the edge" : "";
 }
@@ -106,10 +103,10 @@ function suggestPaths() {
 function updateScreen() {
   if (!state || startupFailed) return;
   const { side, phase, players, locked } = state;
-  $("#side").textContent = `You are ${side === 0 ? "Blue" : "Red"} · choose a path`;
+  $("#side").textContent = `You are ${side === 0 ? "Blue" : "Red"}${phase === "planning" ? " · choose a path" : ""}`;
   $("#blue").textContent = `Blue · ${players[0].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[0] ? "ready" : "choosing"}`;
-  $("#red").textContent = `Red · ${players[1].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[1] ? "ready" : "choosing"}`;
-  $("#phase").textContent = phase === "planning" ? "Choose a path" : phase === "countdown" ? "Launching together" : phase === "finished" ? state.winner === "Draw" ? "Draw" : `${state.winner} wins` : "Duel in motion";
+  $("#red").textContent = `${state.bot ? "Bot" : "Red"} · ${players[1].eliminated ? "OUT" : phase === "finished" ? "survived" : locked[1] ? "ready" : state.botAt && !state.bot ? `joining in ${Math.max(0, Math.ceil((state.botAt - Date.now()) / 1000))}s` : "choosing"}`;
+  $("#stage").textContent = `Round ${state.round} · ${state.round >= 3 ? "ruins appear" : "clear field"}`;
   const canEdit = mountainReady && phase === "planning" && !locked[side];
   $("#equation").disabled = $("#lock").disabled = !canEdit;
   $("#view").disabled = !mountainReady || players[side].eliminated;
@@ -122,7 +119,7 @@ function updateScreen() {
   if (phase === "finished") {
     const win = state.winner === (side === 0 ? "Blue" : "Red");
     $("#result-title").textContent = state.winner === "Draw" ? "It's a draw" : win ? "You held the summit!" : "You fell from the summit";
-    $("#result-detail").textContent = state.winner === "Draw" ? "Both characters went over the edge." : `${state.winner} stayed on top. Try a new path and predict the collision.`;
+    $("#result-detail").textContent = state.winner === "Draw" ? "Both characters went over the edge." : `${state.bot && state.winner === "Red" ? "The bot" : state.winner} stayed on top. Try a new path and predict the collision.`;
   }
 }
 
@@ -141,6 +138,11 @@ socket?.addEventListener("message", ({ data }) => {
   }
   const oldPhase = state?.phase;
   state = message;
+  if (room.searchParams.get("quick") === "1" && state.room) {
+    room.searchParams.delete("quick"); room.searchParams.set("room", state.room);
+    history.replaceState(null, "", room);
+  }
+  view.setDuelRound?.(state.round, state.radius);
   updateLoading();
   if (oldPhase !== "finished" && state.phase === "finished") {
     summitView = true;
@@ -208,10 +210,10 @@ function frame() {
       lastCount = count;
     }
   }
-  if (previewLine?.children?.[0]?.isLine) {
-    const line = previewLine.children[0];
-    const total = line.geometry.getAttribute("position").count;
-    line.geometry.setDrawRange(0, Math.max(2, Math.min(total, Math.floor((Date.now() - previewStarted) / 1400 * total))));
+  if (previewLine?.children?.[0]?.isPoints) {
+    const dots = previewLine.children[0];
+    dots.geometry.setDrawRange(0, Math.min(dots.userData.total,
+      Math.ceil((Date.now() - previewStarted) / 1800 * dots.userData.total)));
   }
   view.render();
   requestAnimationFrame(frame);

@@ -45,9 +45,6 @@ leaf = [material(f"Foliage {i}", c) for i, c in enumerate([
     (.16, .39, .08), (.24, .52, .09), (.40, .66, .11), (.20, .47, .14),
 ])]
 dirt = material("Sunlit worn grass", (.78, .72, .47))
-cloud = [material("Cloud ivory", (.85, .88, .87)),
-         material("Cloud sun", (.94, .93, .86)),
-         material("Cloud shade", (.65, .76, .81))]
 sky_cloud = material("Distant painted atmosphere", (1, 1, 1))
 cloud_image = sky_cloud.node_tree.nodes.new("ShaderNodeTexImage")
 cloud_image.image = bpy.data.images.load(str(OUT / "cloud-bank.png"))
@@ -243,39 +240,12 @@ for i in range(300):
         choices.append((i+side//3) % len(leaf))
 mesh("Foliage on cliff", verts, faces, leaf, choices)
 
-# Cloud puffs taper toward the sides and rise above a flatter shaded base.
-bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3)
-sphere = bpy.context.object
-sphere_vertices = [tuple(vertex.co) for vertex in sphere.data.vertices]
-sphere_faces = [tuple(p.vertices) for p in sphere.data.polygons]
-bpy.data.objects.remove(sphere, do_unlink=True)
-verts, faces, choices = [], [], []
-for side in (-1, 1):
-    for bank in range(4):
-        cx = side * (24 + bank % 2 * 5)
-        cy = 20 + bank // 2 * 8
-        cz = -23 + bank % 2 * 1.5
-        for puff_index in range(19):
-            spread = random.uniform(-1, 1)
-            x = cx + spread * 3.4
-            y = cy + random.uniform(-2.5, 2.5)
-            z = cz + (1 - abs(spread)) * random.uniform(.4, 2.3) + random.uniform(-.4, .4)
-            radius = random.uniform(1.3, 2.6) * (1 - abs(spread) * .25)
-            start = len(verts)
-            phase = random.random() * math.tau
-            for vx, vy, vz in sphere_vertices:
-                puff = 1 + .11 * math.sin(vx*9 + vy*7 + phase) * math.sin(vz*8 - phase)
-                verts.append((x+vx*radius*puff, y+vy*radius*.85*puff,
-                              z+vz*radius*.65*puff))
-            faces.extend(tuple(start+index for index in face) for face in sphere_faces)
-            choices.extend([2 if puff_index % 7 == 0 else (puff_index + bank) % 2] * len(sphere_faces))
-clouds = mesh("Volumetric cloud banks", verts, faces, cloud, choices)
-for polygon in clouds.data.polygons: polygon.use_smooth = True
-
-# The existing painting is distant sky only; nearby cloud banks have true 3D parallax.
+# Layer the painterly sky clouds lower beside the cliff; the old grey puffs obscured them.
 verts, faces = [], []
 for x, y, bottom, width, height in [(-34, 37, -12, 50, 24),
                                      (34, 37, -12, 50, 24),
+                                     (-32, 24, -29, 38, 18),
+                                     (32, 24, -29, 38, 18),
                                      (0, -30, -32, 76, 20)]:
     start = len(verts)
     verts.extend([(x-width/2,y,bottom), (x+width/2,y,bottom),

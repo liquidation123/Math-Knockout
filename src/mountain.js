@@ -40,19 +40,32 @@ export function createMountain(scene) {
   stones.instanceColor.needsUpdate = true;
   stones.castShadow = stones.receiveShadow = true;
   scene.add(stones);
+  scene.userData.stones = stones;
   return new Promise((resolve, reject) => {
     new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load("/assets/mountain.glb", (gltf) => {
       gltf.scene.rotation.x = Math.PI / 2; // Imported Blender axes → Z-up gameplay.
-      scene.userData.atmosphere = [];
       gltf.scene.traverse((object) => {
         if (object.isMesh) object.castShadow = object.receiveShadow = true;
         if (/cloud|grass|flower|foliage/i.test(object.name)) object.castShadow = false;
         if (/cloud/i.test(object.name)) object.receiveShadow = false;
         if (object.name.toLowerCase().includes("atmosphere")) {
-          scene.userData.atmosphere.push(object);
-          object.material = new THREE.MeshBasicMaterial({ map: object.material.map,
-            transparent: true, depthWrite: false, side: THREE.DoubleSide });
-          object.castShadow = object.receiveShadow = false;
+          object.visible = false;
+          // The painted cloud is a sprite in 3D space: it faces the camera and keeps parallax.
+          const cloudMap = object.material.map.clone();
+          cloudMap.flipY = true;
+          cloudMap.needsUpdate = true;
+          for (const [x, y, z, width, height] of [
+            [-34, 37, -12, 50, 24], [34, 37, -12, 50, 24],
+            [34, -37, -12, 50, 24], [-34, -37, -12, 50, 24],
+            [-32, 24, -29, 38, 18], [32, 24, -29, 38, 18],
+            [32, -24, -29, 38, 18], [-32, -24, -29, 38, 18],
+          ]) {
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudMap,
+              transparent: true, depthWrite: false, rotation: Math.PI }));
+            sprite.position.set(x, y, z + height / 2);
+            sprite.scale.set(width, height, 1);
+            scene.add(sprite);
+          }
         }
       });
       scene.add(gltf.scene);

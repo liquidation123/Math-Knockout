@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,7 +64,17 @@ function publish(room) {
   room.clients.forEach((socket, side) => send(socket, {
     type: "state", side, players: room.duel.players, phase: room.duel.phase,
     locked: room.duel.locked, winner: room.duel.winner, startAt: room.startAt,
+    room: room.id, bot: room.bot, botAt: room.botAt, round: room.duel.round, radius: room.duel.radius,
   }));
+}
+
+function countdown(room) {
+  if (!room.duel.locked.every(Boolean)) return;
+  room.duel.phase = "countdown";
+  room.startAt = Date.now() + 3000;
+  room.countdownTimer = setTimeout(() => {
+    if (room.duel.phase === "countdown") { launchDuel(room.duel); publish(room); }
+  }, 3000);
 }
 
 function resetRoom(room) {
@@ -77,13 +88,28 @@ function resetRoom(room) {
 }
 
 sockets.on("connection", (socket, request) => {
-  const id = new URL(request.url, "http://localhost").searchParams.get("room");
+  const params = new URL(request.url, "http://localhost").searchParams;
+  const quick = params.get("quick") === "1";
+  const waiting = quick && [...rooms.values()].find((room) => room.quick && !room.bot && room.clients[0] && !room.clients[1]);
+  const id = quick ? waiting?.id || randomUUID().slice(0, 8) : params.get("room");
   if (!/^[a-zA-Z0-9-]{4,32}$/.test(id || "")) return socket.close(1008, "Invalid room link. Return to Change mode and start a new Bump Duel.");
-  const room = rooms.get(id) || { clients: [null, null], masks: [null, null], duel: createDuel(), startAt: 0 };
+  const room = rooms.get(id) || { id, quick, bot: false, clients: [null, null], masks: [null, null], duel: createDuel(), startAt: 0 };
+  if (room.bot) return socket.close(1008, "This bot match has already started.");
   const side = room.clients.findIndex((client) => !client);
   if (side < 0) return socket.close(1008, "This room already has two players. Close an extra tab, then retry.");
   rooms.set(id, room);
   room.clients[side] = socket;
+  if (side === 0 && quick) {
+    room.botAt = Date.now() + 10000;
+    room.botTimer = setTimeout(() => {
+      if (room.clients[0] && !room.clients[1]) {
+        room.bot = true;
+        if (room.duel.locked[0]) { lockEquation(room.duel, 1, "0"); countdown(room); }
+        publish(room);
+      }
+    }, 10000);
+  }
+  if (side === 1) { clearTimeout(room.botTimer); room.botAt = 0; }
   room.masks.forEach((mask, index) => { if (mask) send(socket, { type: "shape", side: index, mask }); });
   publish(room);
 
@@ -94,13 +120,9 @@ sockets.on("connection", (socket, request) => {
     if (message.type === "lock") {
       const error = lockEquation(room.duel, side, String(message.expression || ""));
       if (error) return send(socket, { type: "error", error });
-      if (room.duel.locked.every(Boolean)) {
-        room.duel.phase = "countdown";
-        room.startAt = Date.now() + 3000;
-        room.countdownTimer = setTimeout(() => {
-          if (room.duel.phase === "countdown") { launchDuel(room.duel); publish(room); }
-        }, 3000);
-      }
+      // A weak server bot chooses the straight route; no client can fake its turn.
+      if (room.bot) lockEquation(room.duel, 1, "0");
+      countdown(room);
       publish(room);
     } else if (message.type === "shape" && room.duel.phase === "planning" && !room.duel.locked[side]) {
       const mask = message.mask;
@@ -119,7 +141,9 @@ sockets.on("connection", (socket, request) => {
   });
   socket.on("close", () => {
     room.clients[side] = null;
-    if (room.clients.every((client) => !client)) { clearTimeout(room.countdownTimer); rooms.delete(id); }
+    if (room.clients.every((client) => !client)) {
+      clearTimeout(room.countdownTimer); clearTimeout(room.botTimer); rooms.delete(id);
+    }
     else {
       room.masks[side] = null;
       room.clients.forEach((client) => send(client, { type: "shape", side, mask: null }));
