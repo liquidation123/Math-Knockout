@@ -1,84 +1,66 @@
 # Out-Mathed
 
-Draw a character, then use equations to compete on a mountain. The site has two modes:
+**Draw a fighter. Choose an equation. Try to stay on the mountain.**
 
-- **Projectile Duel** (`play.html`): three characters per team take turns firing equation-shaped shots. Play locally against a friend or one AI opponent.
-- **Bump Duel** (`bump.html`): two to four characters secretly choose paths and launch together. Collisions push characters; the last one on the summit wins. Group invite rooms support up to four humans; Quick Match still finds one rival or adds a bot after 10 seconds.
+![The Out-Mathed mountain arena](assets/mountain-preview.png)
 
-Both modes use the same Three.js mountain (`assets/mountain.glb`), equation parser, and fixed-step physics. The equation editor uses **MathLive**, styled like a math notebook; it does not use the Desmos API. If MathLive fails to load, plain text inputs still work.
+Out-Mathed is a browser game with two ways to play. **Projectile Duel** is a turn-based 3-vs-3 match where your equation becomes a shot. **Bump Duel** is a simultaneous launch: everyone secretly chooses a path, then their drawn fighters collide on a shrinking summit. You can draw a character first or jump in with starter characters.
 
-## Character drawing
+## Play in a minute
 
-`create.html` starts a 10-second clock when drawing begins. You get 20 L of ink: one liter covers 1% of the 720×440 canvas. Repainting an occupied pixel costs nothing. Pencil, line, bucket, undo, and clear share the same ink count. Press **Enter** to finish early. The drawing is saved in tab `sessionStorage`, so keep the same tab when entering the arena.
+1. On the [home page](index.html), choose **Projectile Duel** or **Bump Duel**. The smaller “Play with starter characters” link skips drawing.
+2. If you draw, you have **20 L of ink** and a **10-second timer that starts with your first mark**. Repainting the same area does not spend more ink. Press **Enter** to finish early.
+3. In the arena, enter an equation and inspect its preview before committing. The game uses the previewed path for the actual shot or launch.
 
-`create.js` saves the image and a compact occupancy mask. `src/character-geometry.js` calculates area, mass, centre of mass, and moment of inertia from that mask. `src/body.js` uses the same mask for the extruded Three.js shape and Bump Duel contact outline. This keeps what you see aligned with what collides. Projectile Duel keeps its existing projectile combat rules.
+| Mode | What you control | How to win |
+| --- | --- | --- |
+| **Projectile Duel** | Pick one of your three teammates, plot a curve, set Force, and fire. Play against a local player or AI. | Knock out the other team's fighters. |
+| **Bump Duel** | Plot a path and set Force. Everyone locks a choice before the launch. | Be the last fighter on the summit. |
 
-## Bump Duel
+Projectile Duel accepts explicit `y = f(x)`, parametric `x(t), y(t)`, polar `r(θ)`, and implicit `F(x,y) = 0` curves. Bump Duel uses an explicit expression such as `0`, `0.5*x`, or `sin(x)`. Type the expression in the field; the UI supplies the equation label. The editor uses **MathLive**, with a plain-text fallback if it cannot load. The game evaluates expressions with its own parser; it does not use the Desmos API.
 
-For a human free-for-all, choose **Group room (2–4)** inside Bump Duel, then use
-**Copy invite** to share the same URL with up to three friends. The host presses
-**Start match** after two to four people have joined. Every surviving player locks
-an equation and Force, then everyone launches together. The last survivor wins;
-eliminated players can watch. Only the host restarts the group match, returning
-everyone to the lobby so more friends can join. Reconnecting within 15 seconds
-keeps your slot and drawing; a longer disconnect eliminates only that player.
-Group rooms need the online WebSocket server; they do not use the offline bot.
+**Bump Duel with friends:** Quick Match pairs you with another player or adds a bot after about 10 seconds. For a private 1-vs-1 match, copy the invite link. **Group room (2–4)** lets the host invite up to three friends and start once at least two players have joined. Online rooms need the Node/WebSocket server. If a hosted Quick Match cannot reach it, a browser bot is available; private and group rooms need a live server.
 
-The Node/WebSocket server (`server.js`) owns online rooms, side assignments, bot matchmaking, countdowns, and the authoritative simulation. The bot sees positions and masses, never the player's hidden equation. It chooses a varied dodge path. The arena rim shrinks between rounds; ruins enter on round 3. A short replay follows a final collision. Interrupted connections can rejoin the same room with a session token.
+## How the drawing affects play
 
-The browser tries the current site's WebSocket server by default, so Render and
-local/LAN Node hosting need no `BUMP_SERVER_URL`. When the website and multiplayer
-server are separate (for example, Vercel plus Render), set `BUMP_SERVER_URL` to
-the persistent server's HTTPS/WSS address at build time. If Quick Match cannot
-connect within 10 seconds, it runs the same simulation against a browser bot.
-Invite and group rooms never fall back to a fake local match. Static hosting alone
-cannot host multiplayer rooms.
+The creator saves your drawing in this tab's `sessionStorage`, so continue to the arena in the **same tab**. The visible shape comes from a 128×80 occupancy mask. More filled cells mean more mass; cells farther from the centre add rotational inertia. The same mask supplies Bump Duel's visible body and contact outline.
 
-The editable mountain source is `assets/mountain.blend`; `tools/build_mountain.py` exports the browser GLB. The exported GLB is about 2.1 MB. `src/mountain.js` loads it once, and `src/scene.js` renders the arena, characters, previews, and camera views.
+Both modes use **change in velocity = impulse ÷ mass**. A heavy fighter changes speed less than a light fighter receiving the same collision impulse. In Bump Duel, the collision solver applies equal and opposite impulses to both fighters; an off-centre contact can also spin them, with the spin depending on each drawing's inertia. Heavier fighters start a Bump launch slower and travel a shorter path for the same Force. In Projectile Duel, the shooter's mass affects recoil and the target's mass affects knockback; damage is a separate fixed rule. These are game physics with tuned launch and bounce values, not a full material simulation.
 
-## Run and verify
+## Run it locally
 
-Use Node.js 22 or newer:
+Use **Node.js 22.9 or newer**:
 
 ```sh
 npm install
 npm start
 ```
 
-Open the printed local address. For a second device, run the server on a reachable host (`HOST=0.0.0.0`) and open that host's address on both devices; `localhost` only reaches the device itself. An old server process must be restarted after pulling changes.
-
-During local development, `npm start` checks files every second. Frontend changes
-reload open pages; backend and shared simulation changes restart the server and
-then reload pages. A backend restart clears local multiplayer rooms. Dependencies,
-generated output, hidden folders, and tests are ignored. Stop with Ctrl+C.
-Refresh is disabled when `NODE_ENV=production`, or when running on Render or Vercel.
-To run locally without refresh, use `NODE_ENV=production npm start`.
+Open the address printed by the server (normally `http://127.0.0.1:5173`). For another device on your network, start with `HOST=0.0.0.0 npm start` and open the host computer's network address on both devices. `localhost` on a second device points back to that device. Restart an old server after pulling new backend code. Local development watches source files and reloads the page; backend changes restart the server and clear local rooms.
 
 ```sh
 npm test
 npm run build
 ```
 
-`dist/` contains the static deployment. The tests cover drawing and ink, equation parsing, fixed-step physics, collision masks, both game modes, bot choices, room connections, and the static solo fallback.
+`npm run build` writes a static site to `dist/`. It includes the pages, assets, and browser libraries. **A static host cannot run multiplayer rooms by itself.** If the website and WebSocket server are on different hosts, set `BUMP_SERVER_URL` to the server's HTTPS or WSS address when building. A single Node deployment can use the same host without that setting.
 
-## PostHog
+## Where to look in the code
 
-The shared browser setup records page activity and the custom events
-`character_created`, `projectile_attack_fired`, `projectile_round_completed`,
-`bump_path_locked`, `bump_duel_completed`, and `bump_invite_copied`.
-The multiplayer server also exports startup, countdown, and room-release logs.
-These events do not include drawings, room/reconnect tokens, or typed equations.
+| If you want to understand… | Start here |
+| --- | --- |
+| The homepage and drawing controls | [`index.html`](index.html), [`create.js`](create.js), [`src/character-geometry.js`](src/character-geometry.js) |
+| Equation parsing and the previewed curve | [`src/equations.js`](src/equations.js), [`src/curves.js`](src/curves.js), [`src/math-text.js`](src/math-text.js) |
+| Projectile hits, recoil, and turns | [`src/projectile.js`](src/projectile.js), [`src/combat.js`](src/combat.js), [`src/main.js`](src/main.js) |
+| Bump launches, mass, contact, and spin | [`src/duel.js`](src/duel.js), [`src/body.js`](src/body.js), [`src/physics.js`](src/physics.js) |
+| 3D arena and fighter rendering | [`src/scene.js`](src/scene.js), [`src/mountain.js`](src/mountain.js) |
+| Online rooms and browser connection | [`server.js`](server.js), [`src/duel-client.js`](src/duel-client.js) |
+| Build and verification | [`build.js`](build.js), [`tests/`](tests/) |
 
-Set `POSTHOG_PROJECT_TOKEN` to the public project token and `POSTHOG_HOST` to
-the ingestion host from your PostHog project (for example, `https://us.i.posthog.com`).
-For local use, keep these in `.env`, which is ignored by Git. With Node 22.9 or
-newer, `npm start` and `npm run build` load that file automatically.
-Without configuration, analytics stays disabled and the game still works.
+The simulation advances in fixed steps (`src/physics.js`), so browser frame rate does not decide the collision outcome. The Bump server runs the authoritative simulation for online rooms and sends state to clients. The editable mountain is [`assets/mountain.blend`](assets/mountain.blend); [`tools/build_mountain.py`](tools/build_mountain.py) exports the browser model.
 
-For Vercel, set both variables in Production and rebuild/redeploy; the static
-build exposes only these two public values in `posthog-config.json`.
-For Render, set both variables on the Node service and deploy the latest commit.
-Never use a personal API key in browser configuration. The browser SDK can be
-blocked by an ad blocker; verify live ingestion in PostHog after deployment.
+## Optional analytics
 
-Web deploy: https://math-knockout-2.onrender.com/
+Analytics are disabled unless `POSTHOG_PROJECT_TOKEN` and `POSTHOG_HOST` are set. For local work, put them in an ignored `.env` file. Set the same variables in the deployment environment and rebuild the static site. Use a **public project token**, never a personal API key. Events describe page and game actions, not drawings, typed equations, or room/reconnect tokens.
+
+Live game: [math-knockout-2.onrender.com](https://math-knockout-2.onrender.com/)
