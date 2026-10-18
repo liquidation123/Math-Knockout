@@ -43,10 +43,17 @@ test("shared mountain uses the branch asset, lighting, and exact stone collision
     await createMountain(scene);
   } finally { GLTFLoader.prototype.load = original; }
   assert.equal(asset, "/assets/mountain.glb");
-  assert.equal(scene.background, null); // Transparent renderer shows the CSS sky.
+  assert.equal(scene.background.getHex(), 0x78c8fb, "Both modes have a sky-blue background in every camera direction.");
   assert.ok(scene.children.some((object) => object.isHemisphereLight && object.intensity === 1.5));
   assert.ok(scene.children.some((object) => object.isDirectionalLight && object.intensity === 2.3));
-  const blocks = scene.children.filter((object) => object.isMesh);
+  const water = scene.getObjectByName("Water below mountain");
+  assert.ok(water?.isMesh, "Both modes share a visible sea below the mountain.");
+  assert.equal(water.geometry.type, "PlaneGeometry");
+  assert.ok(water.material.map.isDataTexture, "Ripples need no extra asset request.");
+  assert.equal(water.rotation.x, 0, "The sea lies on XY, with Z as height.");
+  assert.ok(water.position.z < -21.5, "The sea is below the cliff base.");
+  assert.ok(water.position.z < ARENA.fallHeight, "Water must not prevent fall elimination.");
+  const blocks = scene.children.filter((object) => object.isMesh && object !== water);
   assert.equal(blocks.length, OBSTACLES.length);
   blocks.forEach((mesh, index) => {
     const box = OBSTACLES[index];

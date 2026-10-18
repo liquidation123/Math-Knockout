@@ -4,7 +4,27 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { OBSTACLES } from "./physics.js";
 
 export function createMountain(scene) {
-  scene.background = null;
+  // A solid sky surrounds every camera direction without extra skybox images.
+  scene.background = new THREE.Color(0x78c8fb);
+  // XY is horizontal; keep the sea below the cliff and out of gameplay physics.
+  const pixels = new Uint8Array(64 * 64 * 4);
+  for (let y = 0; y < 64; y += 1) for (let x = 0; x < 64; x += 1) {
+    // Repeating sine bands give the water subtle ripples without an image download.
+    const wave = Math.cos((y + 2 * Math.sin(x * Math.PI / 32)) * Math.PI / 8);
+    const shade = wave > 0.96 ? 255 : 220;
+    pixels.set([shade, shade, shade, 255], (y * 64 + x) * 4);
+  }
+  const ripples = new THREE.DataTexture(pixels, 64, 64);
+  ripples.wrapS = ripples.wrapT = THREE.RepeatWrapping;
+  ripples.repeat.set(80, 80);
+  ripples.magFilter = THREE.LinearFilter;
+  ripples.minFilter = THREE.LinearMipmapLinearFilter;
+  ripples.generateMipmaps = ripples.needsUpdate = true;
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000),
+    new THREE.MeshStandardMaterial({ color: 0x218eb5, map: ripples, roughness: 0.35, metalness: 0.1 }));
+  water.name = "Water below mountain";
+  water.position.z = -22;
+  scene.add(water);
   const ambient = new THREE.HemisphereLight(0xfffaf0, 0xb4a47a, 1.5);
   ambient.position.set(0, 0, 1);
   scene.add(ambient);
