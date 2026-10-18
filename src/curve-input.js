@@ -1,4 +1,5 @@
 import { createCurveModel, previewCurveModel } from "./curves.js";
+import { projectilePlan } from "./attack-paths.js";
 
 export function createEquationInput(onChange) {
   const field = (id) => document.getElementById(id);
@@ -13,6 +14,7 @@ export function createEquationInput(onChange) {
   let modelError = "";
 
   function request() {
+    if (type.value === "dots") return { type: "dots", expression: field("dots-expression").value, extra: field("dots-extra-x").value };
     if (type.value === "explicit") return { type: type.value, expression: field("expression").value };
     if (type.value === "implicit") return { type: type.value, expression: field("implicit-expression").value };
     const prefix = type.value === "polar" ? "polar" : "parameter";
@@ -39,6 +41,7 @@ export function createEquationInput(onChange) {
   }
   function preview(origin, teamDirection) {
     const input = request();
+    if (input.type === "dots") input.direction = teamDirection;
     const key = JSON.stringify(input);
     if (key !== modelKey) {
       modelKey = key;
@@ -63,7 +66,12 @@ export function createEquationInput(onChange) {
     }
     const result = previewCurveModel(model, origin, teamDirection, selection());
     if (result.selection) start.value = result.selection.start;
-    field("curve-note").textContent = result.warning || (type.value === "explicit" ? "" : "Traverse start → end; closed curves stop after one loop.");
+    const plan = !result.error && projectilePlan(result);
+    field("curve-note").textContent = (result.warning ? result.warning + " " : "") + (result.dots ? "Purple dots are isolated teleport destinations."
+      : plan.paths?.length > 1
+      ? (plan.mode === "parallel" ? "Cyan rings: simultaneous branch bullets. One recoil; one hit per enemy." :
+        "Purple rings: teleport arrivals. Gaps do no damage; walls stop the entire bullet.")
+      : (type.value === "explicit" ? "" : "Traverse start → end; closed curves stop after one loop."));
     return result;
   }
   type.addEventListener("change", () => {

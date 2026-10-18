@@ -7,11 +7,13 @@ import { forwardDirection } from "../src/aiming.js";
 import { DUEL_NAMES, chooseBotEquation, createDuel, duelTarget, insideDuel, interceptSlope, launchDuel, lockEquation, resignDuel, safeTravelPath, setDuelBody, updateDuel } from "../src/duel.js";
 import { takeFixedSteps } from "../src/physics.js";
 import { duelSocketUrl } from "../src/duel-connection.js";
+import { chooseBumpAction, publicBumpState } from "../src/ai.js";
+import { equationText } from "../src/ai-types.js";
 
 // Run the real client with a fake DOM/socket, without needing WebGL in Node.
 const source = (await readFile(new URL("../src/duel-client.js", import.meta.url), "utf8"))
   .replace(/^import .+;\n/gm, "");
-function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUrl = "" } = {}) {
+function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUrl = "", chooseAI = chooseBumpAction } = {}) {
   const nodes = new Map();
   const element = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
@@ -23,6 +25,11 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   let resolveMountain, rejectMountain, socket;
   const ready = new Promise((resolve, reject) => { resolveMountain = resolve; rejectMountain = reject; });
   const errors = [], windowEvents = {}, frames = [], analytics = [], copied = [];
+  let generation = 0;
+  const difficulty = new URL(pageUrl).searchParams.get("opponent") || "human";
+  const opponent = { isAI: difficulty !== "human", difficulty, type: "polar",
+    token: () => generation, current: (token) => token === generation,
+    cancel() { generation++; }, wait: async () => true, choosing() {}, speak: async () => true };
   let now = 0;
   class FakeDate extends Date { static now() { return now; } }
   const sessionStorage = { getItem: () => null, setItem() {} };
@@ -41,7 +48,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     send(data) { this.sent.push(JSON.parse(data)); }
     close() { this.readyState = 3; this.emit("close"); }
   }
-  runInNewContext(source, {
+  const api = runInNewContext(source + "\n;({ getDuel: () => duel, getState: () => state });", {
     URL, location: new URL(pageUrl), navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } },
     setTimeout: () => 0,
     document: { querySelector: element, querySelectorAll: () => [] }, window: {
@@ -50,6 +57,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
       posthog: { capture: (name, properties) => analytics.push({ name, properties }) },
     },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
+    createOpponentUI: () => opponent, chooseBumpAction: chooseAI, publicBumpState, equationText,
     buildPreview, forwardDirection, safeTravelPath, insideDuel, interceptSlope, sessionStorage,
     DUEL_NAMES, chooseBotEquation, createDuel, duelTarget, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel, takeFixedSteps,
     Date: FakeDate, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame(fn) { frames.push(fn); },
@@ -57,13 +65,49 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   });
   const message = (data) => socket.emit("message", { data: JSON.stringify(data) });
   const state = (side = 0) => message({ type: "state", side, ...createDuel() });
-  return { element, resolveMountain, rejectMountain, socket, message, state, errors, windowEvents, analytics, copied,
+  return { ...api, element, resolveMountain, rejectMountain, socket, message, state, errors, windowEvents, analytics, copied,
     setNow: (time) => { now = time; }, frame: () => {
       const index = frames.findIndex((fn) => fn.name === "frame");
       if (index >= 0) frames.splice(index, 1)[0]();
     } };
 }
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test("selected Bump AI starts locally at every difficulty, commits independently and uses normal countdown", async () => {
+  for (const difficulty of ["easy", "medium", "hard"]) {
+    const ui = setup({ pageUrl: "https://static.example/bump.html?opponent=" + difficulty });
+    ui.resolveMountain(); await flush();
+    assert.equal(ui.socket, undefined, "Selected AI must not need a multiplayer server");
+    assert.equal(ui.element("#loading").hidden, true);
+    ui.frame(); await flush();
+    assert.equal(ui.getDuel().locked[1], true);
+    assert.equal(ui.getDuel().locked[0], false, "AI commits before learning the human choice");
+    assert.equal(ui.getDuel().phase, "planning");
+    ui.element("#form").submit({ preventDefault() {} });
+    ui.frame();
+    assert.equal(ui.getDuel().phase, "countdown");
+    ui.setNow(3001); ui.frame();
+    assert.equal(ui.getDuel().phase, "running");
+    assert.equal(ui.errors.length, 0);
+  }
+});
+
+test("restarting or leaving during a Bump decision prevents the old AI action", async () => {
+  for (const action of ["restart", "leave"]) {
+    let finish, decisions = 0;
+    const ui = setup({ pageUrl: "https://static.example/bump.html?opponent=hard",
+      chooseAI: () => { decisions++; return new Promise((resolve) => { finish = resolve; }); } });
+    ui.resolveMountain(); await flush();
+    ui.frame(); await flush();
+    ui.frame(); await flush();
+    assert.equal(decisions, 1, "Only one decision may be pending");
+    if (action === "restart") { ui.element("#reset").click(); await flush(); }
+    else ui.windowEvents.pagehide();
+    finish("0"); await flush();
+    assert.equal(ui.getDuel().locked[1], false);
+    assert.equal(ui.errors.length, 0);
+  }
+});
 
 test("Render, custom domains and LAN hosts use their own multiplayer server without extra configuration", async () => {
   for (const origin of ["https://math-knockout-2.onrender.com", "https://game.example.com", "http://192.168.1.20:5173"]) {

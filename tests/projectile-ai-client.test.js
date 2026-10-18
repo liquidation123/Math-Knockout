@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
+import { actionPreview, equationText } from "../src/ai-types.js";
 import { shotDirection } from "../src/aiming.js";
 import { createRound, updateRound, firePreview, resignRound, selectCharacter, setRoundTeamBody, TEAM_NAMES } from "../src/combat.js";
 import { starterMask } from "../src/body.js";
@@ -23,14 +24,14 @@ async function setup(chooseProjectileAction = async () => ({ playerIndex: 3, exp
   const opponent = { difficulty: "ai", isAI: true, cancel: () => { generation += 1; },
     token: () => generation, current: (token) => token === generation, wait: async () => true,
     choosing() {}, speak: async (name, text) => { spoken.push({ name, text }); return true; } };
-  const view = { ready: Promise.resolve(), resetCinematic() {}, finishProjectilePOV() {}, removeCurve() {}, drawCurve() {}, setPlayerShape() {}, onCharacterClick() {}, canvas: { focus() {} } };
+  const view = { ready: Promise.resolve(), resetCinematic() {}, finishProjectilePOV() {}, removeCurve() {}, drawCurve() {}, drawAttackPreview() {}, setPlayerShape() {}, onCharacterClick() {}, canvas: { focus() {} } };
   const api = runInNewContext(source + "\n;({ getRound: () => round, playAiTurn, resetRound });", {
     URLSearchParams, location: { search: "?opponent=ai" }, createOpponentUI: () => opponent,
     document: { querySelector: node, querySelectorAll: () => [], createElement: () => node("new-label") },
     window: { confirm: () => true, addEventListener(name, fn) { windowEvents[name] = fn; } },
     createView: () => view, createVictoryScreen: () => ({ hide() {}, show() {} }),
     createEquationInput: () => ({ key: () => "0", preview: (origin, direction) => buildPreview("0", origin, direction) }),
-    readSavedMask: async () => savedMask, chooseProjectileAction, buildPreview, shotDirection,
+    readSavedMask: async () => savedMask, chooseProjectileAction, buildPreview, actionPreview, equationText, shotDirection,
     createRound, updateRound, firePreview, resignRound, selectCharacter, setRoundTeamBody, starterMask,
     TEAM_NAMES, takeFixedSteps, requestAnimationFrame() {},
     console: { info() {}, warn() {}, error: (...args) => errors.push(args) },

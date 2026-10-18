@@ -63,7 +63,13 @@ if (typeof document !== 'undefined') {
   const mode = params.get('mode');
   arena.href = mode === 'bump' ? `/bump.html${params.has('quick') ? '?quick=1' : ''}` : '/play.html';
   const opponent = params.get('opponent');
-  if (opponent === 'ai') arena.href += '?opponent=ai';
+  if (['ai', 'easy', 'medium', 'hard'].includes(opponent)) {
+    const destination = new URL(arena.href, window.location.href);
+    destination.searchParams.delete('quick');
+    destination.searchParams.set('opponent', opponent);
+    destination.searchParams.set('aiType', params.get('aiType') || 'normal');
+    arena.href = destination.href;
+  }
   arena.textContent = mode === 'bump' ? 'Start Bump Duel →' : 'Start Projectile Duel →';
   const history = [];
   let tool = 'pencil';

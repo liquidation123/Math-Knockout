@@ -172,15 +172,17 @@ test("every translated preview is the exact immutable path used by the projectil
   }
 });
 
-test("a discontinuity ends the first branch without teleporting to a later branch", () => {
+test("a non-rational domain gap teleports without connecting the sections", () => {
   const players = [blue(-6, 0), red(-3, Math.sqrt(2))];
   const preview = buildPreview("sqrt((x-1)(x-2))", players[0].position, 1);
   assert.equal(preview.error, "");
   assert.ok(preview.sections.length >= 2);
   const attack = createAttack(0, players, preview.equation, 0, preview);
   updateProjectile(attack, players, 0.6);
-  assert.equal(attack.reason, "End of continuous curve");
-  assert.ok(attack.position.x <= -5 + 1e-8);
+  assert.equal(attack.mode, "teleport");
+  assert.equal(attack.teleports.length, 1);
+  assert.ok(attack.teleports[0].from.x <= -5 + 1e-8);
+  assert.ok(attack.teleports[0].to.x >= -4 - 1e-8);
   assert.equal(players[1].health, 100);
 });
 

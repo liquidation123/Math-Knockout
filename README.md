@@ -21,6 +21,22 @@ Projectile Duel accepts explicit `y = f(x)`, parametric `x(t), y(t)`, polar `r(�
 
 **Bump Duel with friends:** Quick Match pairs you with another player or adds a bot after about 10 seconds. For a private 1-vs-1 match, copy the invite link. **Group room (2–4)** lets the host invite up to three friends and start once at least two players have joined. Online rooms need the Node/WebSocket server. If a hosted Quick Match cannot reach it, a browser bot is available; private and group rooms need a live server.
 
+**Choose an AI:** Both arenas have separate **AI Type** and **Difficulty** selectors.
+Normal compares several equation families; Parametric, Polar (circles/cardioids),
+Absolute, Trig, and Rational specialize in their named curves. Easy tries one
+approximate choice, Medium compares a few, and Hard simulates more choices with
+the same physics. Selected Bump AI runs in the browser, independently of the
+multiplayer server, and never reads your hidden path. The existing online
+Quick Match bot and human/group rooms keep their current rules.
+
+**Projectile branch abilities:** Rational branches launch together, sharing one
+recoil and one hit per enemy. Other disconnected paths teleport between branch
+starts without damaging anything in the gap. **Dot AI** and the player's
+**Discrete dots** input use isolated points with speed-based timing between them.
+Solid travel and arrival points still check walls and the map edge. Dot AI is
+not available in Bump Duel; Bump characters follow only their continuous launch
+branch. Changing AI settings starts a fresh match and cancels pending choices.
+
 ## How the drawing affects play
 
 The creator saves your drawing in this tab's `sessionStorage`, so continue to the arena in the **same tab**. The visible shape comes from a 128×80 occupancy mask. More filled cells mean more mass; cells farther from the centre add rotational inertia. The same mask supplies Bump Duel's visible body and contact outline.

@@ -32,6 +32,7 @@ export function pathLookAhead(path, position, segment = 1, distance = 3) {
 }
 
 export function effectKind(reason) {
+  if (reason === "Teleport") return "teleport";
   if (reason === "Enemy hit") return "enemy";
   if (reason === "Obstacle") return "obstacle";
   if (reason === "Map boundary") return "boundary";

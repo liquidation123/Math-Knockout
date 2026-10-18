@@ -105,6 +105,9 @@ progress::-webkit-progress-value { border-radius: 999px; transition: width 0.3s;
 }
 .hud-title .opponent-row:hover #opponent-help, .hud-title .opponent-row:focus-within #opponent-help { display: block; }
 #hud > #ai-thinking, #hud > #ai-dialogue { grid-column: 1 / -1; margin: 0; }
+#hud > .opponent-row { grid-column: 1 / -1; margin: 0; }
+#hud > .opponent-row select { flex: 0 0 auto; }
+#ai-type-help { flex: 1; min-width: 180px; font-size: 11px; }
 #hud > #ai-dialogue { padding: 4px 10px; background: #082a45d9; border-radius: 0 8px 8px 0; }
 #hud > #ai-dialogue #ai-speaker { display: inline; margin: 0 8px 0 0; }
 .hud-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }

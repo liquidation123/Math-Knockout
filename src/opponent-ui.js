@@ -1,14 +1,24 @@
 import { AI_LEVELS } from "./ai.js";
+import { AI_TYPES, TYPE_HELP } from "./ai-types.js";
 
 export function createOpponentUI() {
   const page = new URL(location.href);
   const selector = document.querySelector("#opponent");
-  const difficulty = AI_LEVELS[page.searchParams.get("opponent")] ? page.searchParams.get("opponent") : "human";
-  selector.value = difficulty;
+  const typeSelector = document.querySelector("#ai-type");
+  const levelSelector = document.querySelector("#difficulty");
+  const requestedLevel = page.searchParams.get("opponent");
+  const difficulty = requestedLevel === "ai" ? "hard" : AI_LEVELS[requestedLevel] ? requestedLevel : "human";
+  const requestedType = page.searchParams.get("aiType");
+  const type = AI_TYPES[requestedType] && !(page.pathname === "/bump.html" && requestedType === "dot") ? requestedType : "normal";
+  if (typeSelector) { typeSelector.value = type; typeSelector.disabled = difficulty === "human"; }
+  if (levelSelector) { levelSelector.value = difficulty === "human" ? "medium" : difficulty; levelSelector.disabled = difficulty === "human"; }
+  if (document.querySelector("#ai-type-help")) document.querySelector("#ai-type-help").textContent = TYPE_HELP[type];
+  selector.value = difficulty === "human" ? "human" : "ai";
   const drawingLink = document.querySelector("#character-note a");
   if (drawingLink) {
     const drawingPage = new URL(drawingLink.href, page);
     drawingPage.searchParams.set("opponent", difficulty);
+    drawingPage.searchParams.set("aiType", type);
     drawingLink.href = drawingPage.href;
   }
   document.querySelector("#opponent-help").textContent = AI_LEVELS[difficulty]?.description || "Play against another person using the existing controls.";
@@ -47,12 +57,24 @@ export function createOpponentUI() {
   }
   selector.addEventListener("change", () => {
     cancel();
-    page.searchParams.set("opponent", selector.value);
+    page.searchParams.set("opponent", selector.value === "ai" ? levelSelector.value : selector.value);
+    page.searchParams.set("aiType", typeSelector.value);
+    page.searchParams.delete("quick");
+    page.searchParams.delete("players");
     page.searchParams.delete("room"); // A different opponent always gets a fresh match.
     location.assign(page.href);
   });
+  for (const setting of [typeSelector, levelSelector].filter(Boolean)) setting.addEventListener("change", () => {
+    cancel();
+    page.searchParams.set("opponent", levelSelector.value);
+    page.searchParams.set("aiType", typeSelector.value);
+    page.searchParams.delete("quick");
+    page.searchParams.delete("players");
+    page.searchParams.delete("room");
+    location.assign(page.href);
+  });
   window.addEventListener("pagehide", cancel);
-  return { difficulty, isAI: difficulty !== "human", cancel, wait, speak,
+  return { difficulty, type, isAI: difficulty !== "human", cancel, wait, speak,
     token: () => generation, current: (token) => token === generation,
     choosing: (active) => { thinking.hidden = !active; },
   };

@@ -5,10 +5,15 @@ import { takeFixedSteps } from "./physics.js";
 import { createView } from "./scene.js";
 import { readSavedMask } from "./saved-character.js";
 import { duelSocketUrl } from "./duel-connection.js";
+import { chooseBumpAction, publicBumpState } from "./ai.js";
+import { createOpponentUI } from "./opponent-ui.js";
+import { equationText } from "./ai-types.js";
 
 const $ = (selector) => document.querySelector(selector);
+const opponent = createOpponentUI();
+let aiPending = false, aiFailed = false, aiEquation = null;
 const room = new URL(location.href);
-if (!room.searchParams.has("room") && room.searchParams.get("quick") !== "1") {
+if (!opponent.isAI && !room.searchParams.has("room") && room.searchParams.get("quick") !== "1") {
   room.searchParams.set("room", crypto.randomUUID().slice(0, 8));
   history.replaceState(null, "", room);
 }
@@ -22,9 +27,10 @@ let pathWasLocked = false;
 const localPage = ["localhost", "127.0.0.1", "[::1]"].includes(room.hostname);
 const quick = room.searchParams.get("quick") === "1";
 $("#party-link").hidden = room.searchParams.get("players") === "4";
-const canFallback = !localPage && quick;
+const canFallback = !opponent.isAI && !localPage && quick;
 const backendStart = Date.now();
-let solo = false;
+let solo = opponent.isAI;
+if (solo) $("#invite").hidden = $("#party-link").hidden = true;
 let duel, soloStartAt = 0, previous = 0;
 const soloClock = { accumulator: 0 };
 function updateLoading() {
@@ -57,12 +63,14 @@ const connectionHelp = localPage
   ? "Cannot reach the Bump Duel server. Stop the old server and run npm start again; open the address it prints, then retry."
   : "Online Bump Duel could not connect. Retry, or check that the multiplayer server is running. Static hosts such as Vercel need BUMP_SERVER_URL set to a live WebSocket server.";
 try {
+  if (!solo) {
   // Render and LAN hosts serve multiplayer at the page's own address too.
   // A configured BUMP_SERVER_URL still overrides this same-origin default.
   const address = new URL(duelSocketUrl(room.href));
   const token = room.searchParams.get("room") && sessionStorage.getItem("duel:" + room.searchParams.get("room"));
   if (token) address.searchParams.set("resume", token);
   socket = new WebSocket(address.href);
+  }
 } catch (error) {
   if (!canFallback) showConnectionError(connectionHelp, error);
 }
@@ -124,7 +132,7 @@ function updateScreen() {
   const group = players.length > 2;
   const host = !group || state.host === side;
   const connected = state.connected?.filter(Boolean).length || 0;
-  $("#party-link").hidden = group;
+  $("#party-link").hidden = group || opponent.isAI;
   $("#start").hidden = !group || phase !== "lobby" || !host;
   $("#start").disabled = !mountainReady || connected < 2;
   $("#roster").hidden = !group;
@@ -197,6 +205,7 @@ function receiveState(message) {
   if (oldPhase !== "countdown" && state.phase === "countdown") {
     view.setViewMode("follow");
     summitView = false;
+    if (opponent.isAI && aiEquation) opponent.speak("Red", equationText(aiEquation), opponent.token());
   }
   if ((state.phase === "running" || state.players[state.side].eliminated) && previewLine) { view.removeCurve(previewLine); previewLine = null; }
   if (state.players.length > 2 && state.room && room.searchParams.get("players") !== "4") {
@@ -213,9 +222,13 @@ function publishSolo() {
 }
 
 async function startSolo(botNow = false) {
+  opponent.cancel();
+  aiPending = false;
+  aiFailed = false;
+  aiEquation = null;
   duel = createDuel();
   const current = duel;
-  duel.botAt = Date.now() + (botNow ? 0 : 10000);
+  duel.botAt = Date.now() + (botNow || opponent.isAI ? 0 : 10000);
   soloStartAt = 0;
   previous = 0;
   soloClock.accumulator = 0;
@@ -228,6 +241,37 @@ async function startSolo(botNow = false) {
   } catch { $("#error").textContent = "Saved drawing unavailable; using a starter character."; }
   if (current !== duel) return;
   publishSolo();
+}
+
+async function playBumpAi() {
+  if (!opponent.isAI || aiPending || aiFailed || leaving || !mountainReady ||
+      !duel || duel.phase !== "planning" || duel.locked[1] || duel.players[1].eliminated) return;
+  aiPending = true;
+  const token = opponent.token();
+  const current = duel;
+  const publicState = publicBumpState(duel); // No hidden human equation or path.
+  opponent.choosing(true);
+  try {
+    await opponent.wait(150, token);
+    const expression = await chooseBumpAction(publicState, opponent.difficulty, {
+      type: opponent.type, pause: () => opponent.wait(0, token),
+      cancelled: () => !opponent.current(token) || leaving,
+    });
+    if (!opponent.current(token) || leaving || current !== duel || duel.phase !== "planning" || duel.locked[1]) return;
+    if (!expression) throw new Error("No valid AI path.");
+    const error = lockEquation(duel, 1, expression);
+    if (error) throw new Error(error);
+    aiEquation = expression;
+    publishSolo();
+  } catch (error) {
+    if (opponent.current(token)) {
+      aiFailed = true;
+      $("#error").textContent = "AI could not choose a path. Restart to retry.";
+      console.error("Bump AI:", error);
+    }
+  } finally {
+    if (opponent.current(token)) { aiPending = false; opponent.choosing(false); }
+  }
 }
 
 socket?.addEventListener("message", ({ data }) => {
@@ -260,7 +304,7 @@ socket?.addEventListener("close", (event) => {
     setTimeout(() => location.reload(), 900);
   } else showConnectionError(event.reason || connectionHelp);
 });
-window.addEventListener("pagehide", () => { leaving = true; document.exitPointerLock?.(); socket?.close(); });
+window.addEventListener("pagehide", () => { leaving = true; opponent.cancel(); document.exitPointerLock?.(); socket?.close(); });
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 $("#equation").addEventListener("input", drawPreview);
 $("#bump-force").addEventListener("input", () => {
@@ -284,7 +328,7 @@ $("#form").addEventListener("submit", (event) => {
   } else if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "lock", expression: $("#equation").value, force: Number($("#bump-force").value) }));
 });
 function restart() {
-  if (solo) startSolo();
+  if (solo) startSolo(opponent.isAI);
   else if (!startupFailed && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "reset" }));
 }
 $("#reset").addEventListener("click", restart);
@@ -297,7 +341,7 @@ $("#resign").addEventListener("click", () => {
   if (startupFailed || !state || state.phase === "finished" || !mountainReady) return;
   const team = DUEL_NAMES[state.side];
   if (!window.confirm(`Resign as ${team}? Your opponent will win this round.`)) return;
-  if (solo) { if (resignDuel(duel, state.side)) publishSolo(); }
+  if (solo) { if (resignDuel(duel, state.side)) { opponent.cancel(); publishSolo(); } }
   else if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "resign" }));
 });
 $("#invite").addEventListener("click", async () => {
@@ -324,7 +368,8 @@ function frame() {
   if (solo && duel && mountainReady && !startupFailed) {
     const now = Date.now();
     if (duel.phase !== "finished" && !duel.bot && now >= duel.botAt) { duel.bot = true; duel.botAt = 0; }
-    if (duel.bot && duel.phase === "planning" && !duel.locked[1])
+    if (opponent.isAI) playBumpAi();
+    else if (duel.bot && duel.phase === "planning" && !duel.locked[1])
       lockEquation(duel, 1, chooseBotEquation(duel));
     if (duel.phase === "planning" && duel.locked.every(Boolean)) {
       duel.phase = "countdown";
@@ -367,4 +412,5 @@ function frame() {
   view.render();
   requestAnimationFrame(frame);
 }
+if (solo) startSolo(true);
 requestAnimationFrame(frame);

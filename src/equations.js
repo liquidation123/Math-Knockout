@@ -61,6 +61,7 @@ export function compileExpression(input, variables = ["x"]) {
   }
   return {
     expression: input.trim(),
+    rational: isRational(postfix),
     evaluate(values = {}) {
       try {
         return parser.postfixEval(postfix, values);
@@ -71,10 +72,35 @@ export function compileExpression(input, variables = ["x"]) {
   };
 }
 
+// Read the existing parser's postfix tokens, not a second expression parser.
+// A rational function uses arithmetic and integer powers, with x in a divisor.
+function isRational(tokens) {
+  const stack = [];
+  for (const token of tokens) {
+    if (token.type === Mexp.TOKEN_TYPES.NUMBER || token.type === Mexp.TOKEN_TYPES.CONSTANT) {
+      stack.push({ variable: token.value === "x", divided: false,
+        constant: typeof token.value === "number" ? token.value : undefined });
+    } else if (token.show === "-" && token.type === Mexp.TOKEN_TYPES.FUNCTION_WITH_ONE_ARG) {
+      const a = stack.pop();
+      if (!a) return false;
+      stack.push({ ...a, constant: a.constant === undefined ? undefined : -a.constant });
+    } else {
+      if (!["+", "-", "&times;", "&divide;", "^"].includes(token.show)) return false;
+      const b = stack.pop(), a = stack.pop();
+      if (!a || !b || (token.show === "^" && !Number.isInteger(b.constant))) return false;
+      const constant = !a.variable && !b.variable ? token.value(a.constant, b.constant) : undefined;
+      stack.push({ variable: a.variable || b.variable, constant,
+        divided: a.divided || b.divided || (token.show === "&divide;" && b.variable) ||
+          (token.show === "^" && a.variable && b.constant < 0) });
+    }
+  }
+  return stack.length === 1 && stack[0].divided;
+}
+
 export function parseEquation(input) {
   const compiled = compileExpression(input, ["x"]);
   return {
-    expression: input.trim(), name: "y = " + input.trim(), color: 0xffcd6b,
+    expression: input.trim(), name: "y = " + input.trim(), color: 0xffcd6b, rational: compiled.rational,
     evaluate: (x) => compiled.evaluate({ x }),
   };
 }
@@ -123,8 +149,12 @@ export function sampleEquation(equation, origin, anchor = { x: 0, y: 0 }) {
 function findLaunchAnchor(equation, direction) {
   const atZero = sampleValue(equation, 0);
   if (Number.isFinite(atZero)) return { x: 0, y: atZero };
-  // Search outward from zero first; use the other side only if this side has no real samples.
-  for (const start of [SAMPLE_COUNT / 2 + direction, direction > 0 ? 0 : SAMPLE_COUNT]) {
+  // Near a pole, the first sample (e.g. x=.05 for 1/x) makes an almost vertical
+  // launch. Prefer a finite point at least one unit away, with a near-zero fallback
+  // for narrow domains so a valid short branch can still fire.
+  const oneUnit = Math.ceil(SAMPLE_COUNT / (DOMAIN_END - DOMAIN_START));
+  for (const start of [SAMPLE_COUNT / 2 + direction * oneUnit,
+    SAMPLE_COUNT / 2 + direction, direction > 0 ? 0 : SAMPLE_COUNT]) {
     for (let index = start; index >= 0 && index <= SAMPLE_COUNT; index += direction) {
       const x = DOMAIN_START + (DOMAIN_END - DOMAIN_START) * index / SAMPLE_COUNT;
       const y = sampleValue(equation, x);
@@ -138,7 +168,15 @@ export function buildTrajectory(equation, origin, direction) {
   const anchor = findLaunchAnchor(equation, direction);
   const sections = sampleEquation(equation, origin, anchor);
   const path = getFiringPath(sections, origin, direction);
-  return { equation, origin: { x: origin.x, y: origin.y }, anchor, sections, path };
+  const later = sections.filter((points) => direction > 0
+    ? points[0].x > path.at(-1).x : points.at(-1).x < path.at(-1).x);
+  if (direction < 0) later.reverse();
+  const travelSections = [path, ...later.map((points) => direction > 0 ? points : [...points].reverse())];
+  const otherBranches = sections.filter((points) => !points.some((point) => Math.abs(point.x - origin.x) < 1e-8));
+  if (direction < 0) otherBranches.reverse();
+  const rationalSections = [path, ...otherBranches.map((points) => direction > 0 ? points : [...points].reverse())];
+  const warning = anchor.x ? `Undefined at x=0: anchored at local x=${Number(anchor.x.toFixed(3))}. Your expression is unchanged.` : "";
+  return { equation, origin: { x: origin.x, y: origin.y }, anchor, sections, path, travelSections, rationalSections, warning };
 }
 
 export function buildPreview(expression, origin, direction = 1) {

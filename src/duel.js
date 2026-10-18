@@ -1,4 +1,4 @@
-import { buildPreview } from "./equations.js";
+import { buildCurvePreview } from "./curves.js";
 import { ARENA, OBSTACLES, PLAYER_SIZE, applyImpulse, createPlayer, movePlayerXY, playersAreStill, updatePlayer } from "./physics.js";
 import { forwardDirection } from "./aiming.js";
 import { bodyContact, bodyFromMask, starterMask } from "./body.js";
@@ -103,7 +103,7 @@ export function lockEquation(duel, side, expression, force = 1) {
   const target = duelTarget(duel.players, side);
   if (target === null) return "Wait for an opponent.";
   const direction = forwardDirection(player.position, duel.players[target].position, side % 2 === 0 ? 1 : -1);
-  const preview = buildPreview(expression, player.position, direction);
+  const preview = buildCurvePreview(expression, player.position, direction);
   if (preview.error) return preview.error;
   if (preview.path.length < 2) return "Choose a path with room to move.";
   // Force multiplies forward speed; heavier drawings still start slower.

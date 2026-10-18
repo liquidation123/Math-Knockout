@@ -6,6 +6,7 @@
   <title>Out-Mathed — Bump Duel</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <link rel="stylesheet" href="/duel.css">
+  <link rel="stylesheet" href="/opponent.css">
   <link rel="stylesheet" href="/view-gizmo.css">
   <script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/","math-expression-evaluator":"/src/math-parser-browser.js","mathlive":"/node_modules/mathlive/mathlive.min.mjs"}}</script>
   <script type="module" src="/src/posthog-init.js"></script>
@@ -16,6 +17,14 @@
     <div id="loading" role="status"><span id="loading-message">Connecting to the duel server…</span> <button id="retry" hidden>Retry</button></div>
     <header id="hud" class="panel">
       <div class="brand"><h1><a href="/">out-mathed</a></h1><a id="party-link" href="/bump.html?players=4">Group room (2–4)</a><button id="invite" type="button">Copy invite ↗</button><button id="start" type="button" hidden disabled>Start match</button></div>
+        <div class="opponent-row">
+          <label for="opponent">Opponent</label><select id="opponent"><option value="human">Human opponent</option><option value="ai">AI opponent</option></select>
+          <label for="ai-type">AI Type</label><select id="ai-type"><option value="normal">Normal AI</option><option value="parametric">Parametric AI</option><option value="polar">Polar AI</option><option value="absolute">Absolute AI</option><option value="trig">Trig AI</option><option value="rational">Rational AI</option></select>
+          <label for="difficulty">Difficulty</label><select id="difficulty"><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
+          <span id="opponent-help"></span><span id="ai-type-help"></span>
+        </div>
+      <p id="ai-thinking" role="status" hidden>AI is choosing…</p>
+      <aside id="ai-dialogue" aria-label="Red character dialogue" hidden><strong id="ai-speaker"></strong><span id="ai-speech"></span></aside>
       <div class="score"><span id="blue">Blue · waiting</span><span id="stage">Round 1</span><span id="red">Red · waiting</span></div>
       <div id="roster" aria-label="Group players" aria-live="polite" hidden></div>
     </header>
