@@ -16,7 +16,7 @@ for (const file of [
   await cp(new URL(file, root), new URL(file, output), { recursive: true });
 }
 await mkdir(new URL("assets/", output));
-for (const file of ["hero-landscape.jpg", "defeat-landscape.jpg", "pencil-cursor.svg", "mountain.glb"]) {
+for (const file of ["hero-landscape.jpg", "defeat-landscape.jpg", "pencil-cursor.svg", "limestone.jpg", "mountain.glb"]) {
   await cp(new URL("assets/" + file, root), new URL("assets/" + file, output));
 }
 

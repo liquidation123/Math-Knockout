@@ -95,6 +95,7 @@ export function createView(container, hud, controls, mode = "projectile") {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.localClippingEnabled = true;
   const curveBounds = [
     new THREE.Plane(new THREE.Vector3(1, 0, 0), ARENA.halfWidth),

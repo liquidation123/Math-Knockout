@@ -44,8 +44,8 @@ test("shared mountain uses the branch asset, lighting, and exact stone collision
   } finally { GLTFLoader.prototype.load = original; }
   assert.equal(asset, "/assets/mountain.glb");
   assert.equal(scene.background, null); // Transparent renderer shows the CSS sky.
-  assert.ok(scene.children.some((object) => object.isHemisphereLight && object.intensity === 1.5));
-  assert.ok(scene.children.some((object) => object.isDirectionalLight && object.intensity === 2.3));
+  assert.ok(scene.children.some((object) => object.isHemisphereLight && object.intensity === 0.9));
+  assert.ok(scene.children.some((object) => object.isDirectionalLight && object.intensity === 2.7));
   const stones = scene.children.find((object) => object.isInstancedMesh);
   assert.equal(stones.count, OBSTACLES.length * 12);
   const matrix = new THREE.Matrix4(), center = new THREE.Vector3();

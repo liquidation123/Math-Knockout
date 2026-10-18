@@ -6,18 +6,22 @@ import { OBSTACLES } from "./physics.js";
 
 export function createMountain(scene) {
   scene.background = null;
-  const ambient = new THREE.HemisphereLight(0xfffaf0, 0xb4a47a, 1.5);
+  const ambient = new THREE.HemisphereLight(0xfffaf0, 0xb4a47a, 0.9);
   ambient.position.set(0, 0, 1);
   scene.add(ambient);
-  const light = new THREE.DirectionalLight(0xfff5db, 2.3);
+  const light = new THREE.DirectionalLight(0xfff5db, 2.7);
   light.position.set(-4, 8, 10);
   light.castShadow = true;
   Object.assign(light.shadow.camera, { left: -18, right: 18, top: 12, bottom: -12 });
   light.shadow.mapSize.set(1024, 1024);
   scene.add(light);
   // Rounded stone courses share one draw call; their outer edges match each collision box.
+  const stoneTexture = typeof document === "undefined" ? null :
+    new THREE.TextureLoader().load("/assets/limestone.jpg");
+  if (stoneTexture) stoneTexture.colorSpace = THREE.SRGBColorSpace;
   const stones = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 1, 1, 2, .06),
-    new THREE.MeshStandardMaterial({ color: 0xf5e8cf, roughness: 1 }), OBSTACLES.length * 12);
+    new THREE.MeshStandardMaterial({ map: stoneTexture, roughness: 1 }), OBSTACLES.length * 12);
+  stones.material.color.setRGB(1.6, 1.55, 1.4);
   const dummy = new THREE.Object3D();
   OBSTACLES.forEach((box, index) => {
     const alongX = box.width > box.depth;
@@ -29,7 +33,7 @@ export function createMountain(scene) {
       dummy.updateMatrix();
       const i = index * 12 + row * 4 + piece;
       stones.setMatrixAt(i, dummy.matrix);
-      stones.setColorAt(i, new THREE.Color([0xe1d0af, 0xf0dec0, 0xd2c3a8][(row * 3 + piece + index) % 3]));
+      stones.setColorAt(i, new THREE.Color([0xffffff, 0xf2f2e9, 0xe9e9e3][(row * 3 + piece + index) % 3]));
     }
   });
   stones.instanceMatrix.needsUpdate = true;
