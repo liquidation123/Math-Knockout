@@ -1,11 +1,11 @@
 import { buildPreview } from "./equations.js";
 import { firePreview, selectCharacter, updateRound } from "./combat.js";
-import { createDuel, launchDuel, lockEquation, updateDuel, bumpDirection } from "./duel.js";
+import { createDuel, launchDuel, lockEquation, updateDuel } from "./duel.js";
 import { FIXED_STEP, insideArena } from "./physics.js";
 
 export const AI_LEVELS = {
   easy: { description: "Simple lines, rough aim and occasional mistakes.", projectileLimit: 1, bumpLimit: 1 },
-  medium: { description: "Compares several routes and landing safety.", projectileLimit: 36, bumpLimit: 7 },
+  medium: { description: "Compares several routes, obstacles and landing safety.", projectileLimit: 36, bumpLimit: 7 },
   hard: { description: "Simulates more choices, force and survival risks. Not unbeatable.", projectileLimit: 81, bumpLimit: 10 },
 };
 const copyPlayers = (players) => players.map((player) => ({
@@ -100,15 +100,13 @@ export function bumpCandidates(publicState, difficulty, random = Math.random) {
   }
   return [...new Set([
     aimedCurve(red.position, blue.position, 0),
-    `${number(slopeTo(red.position, blue.position) + 0.12)}*x`,
-    `${number(slopeTo(red.position, blue.position) - 0.12)}*x`,
-    aimedCurve(red.position, blue.position, 0.025),
-    aimedCurve(red.position, blue.position, -0.025),
+    aimedCurve(red.position, { x: 0, y: 0 }, 0),
+    "0", "0.2*x", "-0.2*x",
+    aimedCurve(red.position, blue.position, 0.045),
+    aimedCurve(red.position, blue.position, -0.045),
     aimedCurve(red.position, blue.position, "wave"),
     aimedCurve(red.position, blue.position, "-wave"),
-    aimedCurve(red.position, blue.position, 0.05),
-    aimedCurve(red.position, blue.position, -0.05),
-    `${number(slopeTo(red.position, blue.position) + 0.25)}*x`,
+    `${number(slopeTo(red.position, { x: 0, y: 0 }) + 0.4)}*x`,
   ])].slice(0, AI_LEVELS[difficulty].bumpLimit);
 }
 
@@ -117,19 +115,12 @@ export function scoreBumpAction(publicState, expression, imaginedBlue) {
   trial.players = copyPlayers(publicState.players);
   if (lockEquation(trial, 0, imaginedBlue) || lockEquation(trial, 1, expression)) return -Infinity;
   launchDuel(trial);
-  const startGap = distance(trial.players[0].position, trial.players[1].position);
-  let closestGap = startGap;
-  for (let step = 0; step < 8.1 / FIXED_STEP && trial.phase === "running"; step += 1) {
-    updateDuel(trial, FIXED_STEP);
-    closestGap = Math.min(closestGap, distance(trial.players[0].position, trial.players[1].position));
-  }
+  for (let step = 0; step < 8.1 / FIXED_STEP && trial.phase === "running"; step += 1) updateDuel(trial, FIXED_STEP);
   const [blue, red] = trial.players;
-  // Reward closing in and real contact, not retreating to the centre. A trade is
-  // preferable to a passive miss, but falling without a hit is still a bad move.
-  return (blue.eliminated ? 250 : 0) - (red.eliminated ? 180 : 0)
-    + (trial.contacts ? 90 : 0) + (startGap - closestGap) * 5 - closestGap * 5
-    - (!blue.eliminated && !red.eliminated ? distance(red.position, blue.position) * 2 : 0)
-    - (!red.eliminated && !insideArena(red.position.x, red.position.y, 1) ? 15 : 0);
+  // A safe central landing matters more than chasing a collision over the cliff.
+  return (blue.eliminated ? 120 : 0) - (red.eliminated ? 200 : 0)
+    - (insideArena(red.position.x, red.position.y, 1) ? 0 : 15)
+    - distance(red.position, { x: 0, y: 0 }) - distance(red.position, blue.position) * 0.15;
 }
 
 export async function chooseBumpAction(publicState, difficulty, options = {}) {
@@ -144,11 +135,11 @@ export async function chooseBumpAction(publicState, difficulty, options = {}) {
     for (const guess of guesses) {
       if (cancelled()) return null;
       scores.push(difficulty === "easy"
-        ? (buildPreview(expression, red.position, bumpDirection(publicState.players, 1)).error ? -Infinity : 0)
+        ? (buildPreview(expression, red.position, -1).error ? -Infinity : 0)
         : scoreBumpAction(publicState, expression, guess));
       await pause();
     }
-    const score = Math.min(...scores) * 0.2 + scores.reduce((sum, value) => sum + value, 0) / scores.length * 0.8;
+    const score = Math.min(...scores) * 0.6 + scores.reduce((sum, value) => sum + value, 0) / scores.length * 0.4;
     if (score > bestScore) { best = expression; bestScore = score; }
   }
   return cancelled() ? null : best;

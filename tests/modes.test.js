@@ -30,7 +30,7 @@ test("homepage offers both modes, with separate entry points and relevant contro
   for (const page of [projectile, bump]) assert.match(page, /href="\/">Change mode/);
   const drawing = await source("create.js");
   assert.match(drawing, /mode === 'bump' \? '\/bump\.html' : '\/play\.html'/);
-  assert.match(await source("src/scene.js"), /createMountain\(scene, mode\)/);
+  assert.match(await source("src/scene.js"), /createMountain\(scene\)/);
   assert.match(await source("src/duel-client.js"), /createView\(.+, "bump"\)/);
 });
 
@@ -133,57 +133,21 @@ test("Projectile Duel has no contact damage or contact impulse", () => {
   }
 });
 
-test("Bump Duel crosses former walls, including under knockback; Projectile Duel still collides", () => {
+test("Bump Duel keeps contact knockback without projectile damage and stops at stone walls", () => {
   const duel = createDuel();
   duel.players[0].position = { x: -7, y: 4, z: 0.5 };
-  duel.players[1].position = { x: 12, y: -5, z: 0.5 };
+  duel.players[1].position = { x: 7, y: 4, z: 0.5 };
   lockEquation(duel, 0, "0"); lockEquation(duel, 1, "0"); launchDuel(duel);
   for (let tick = 0; tick < 180; tick += 1) updateDuel(duel, FIXED_STEP);
-  assert.ok(duel.players[0].position.x > 0, "A launch crosses the old wall at x=-3.6.");
+  assert.ok(Math.abs(duel.players[0].position.x + 4.5) < 1e-8);
+  assert.equal(duel.paths[0].done, true);
   assert.ok(duel.players.every((player) => player.health === 100));
-  const pushed = createDuel();
-  pushed.players[0].position = { x: -7, y: 4, z: 0.5 };
-  pushed.players[1].position = { x: 12, y: -5, z: 0.5 };
-  lockEquation(pushed, 0, "0"); lockEquation(pushed, 1, "0"); launchDuel(pushed);
-  pushed.paths[0].done = true;
-  pushed.players[0].velocity.x = 8;
-  for (let tick = 0; tick < 180; tick += 1) updateDuel(pushed, FIXED_STEP);
-  assert.ok(pushed.players[0].position.x > -1, "Contact knockback crosses the old walls too.");
-  const projectilePlayer = createPlayer("Blue", -7, 4, 0.5, 0);
-  projectilePlayer.velocity.x = 8;
-  for (let tick = 0; tick < 180; tick += 1) updatePlayer(projectilePlayer, FIXED_STEP);
-  assert.equal(projectilePlayer.position.x, -4.5, "Projectile Duel retains its wall collision.");
-});
-
-test("Bump Duel keeps contact knockback and fall elimination without projectile damage", () => {
   const collision = createDuel();
   lockEquation(collision, 0, "0"); lockEquation(collision, 1, "0"); launchDuel(collision);
   for (let tick = 0; tick < 1200 && collision.phase === "running"; tick += 1) updateDuel(collision, FIXED_STEP);
   assert.equal(collision.phase, "finished");
   assert.ok(collision.players.every((player) => player.health === 100 && player.eliminated));
   assert.equal("attack" in collision, false);
-});
-
-test("only Bump hides generated barriers and imported rim ruins; water and sky stay", async () => {
-  const original = GLTFLoader.prototype.load;
-  try {
-    for (const mode of ["bump", "projectile"]) {
-      const scene = new THREE.Scene(), model = new THREE.Group();
-      const ruins = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
-      ruins.name = "Broken_stone_ring_and_ruins";
-      const grass = new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshStandardMaterial());
-      grass.name = "Playable_grass_top";
-      model.add(ruins, grass);
-      GLTFLoader.prototype.load = (url, complete) => complete({ scene: model });
-      await createMountain(scene, mode);
-      assert.equal(ruins.visible, mode !== "bump");
-      assert.equal(grass.visible, true);
-      assert.ok(scene.getObjectByName("Water below mountain"));
-      assert.equal(scene.background.getHex(), 0x78c8fb);
-      const barriers = scene.children.filter((object) => object.isMesh && object.name !== "Water below mountain");
-      assert.equal(barriers.length, mode === "bump" ? 0 : OBSTACLES.length);
-    }
-  } finally { GLTFLoader.prototype.load = original; }
 });
 
 test("fresh games do not share attacks, health, locks, velocities or results", () => {
