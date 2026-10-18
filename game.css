@@ -6,7 +6,15 @@
 }
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-main { position: relative; width: 100%; height: 100dvh; }
+main { position: relative; width: 100%; height: 100dvh; overflow: hidden; background: #1686d8; }
+/* Same sky landscape as the home and creator pages, blurred so the arena stands out.
+   The 3D renderer is transparent, so this shows behind the mountain. */
+main::before {
+  content: ''; position: absolute; inset: -30px;
+  background: linear-gradient(#06325c33, transparent 40%, #04223a66),
+    url('/assets/hero-landscape.jpg') center 60% / cover no-repeat;
+  filter: blur(6px) saturate(1.08);
+}
 #arena { position: absolute; inset: 0; }
 canvas { display: block; width: 100%; height: 100%; }
 .panel {
