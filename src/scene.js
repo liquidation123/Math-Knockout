@@ -286,6 +286,7 @@ export function createView(container, hud, controls, mode = "projectile") {
       return false;
     }
     const color = index < (mode === "bump" ? 1 : 3) ? [24, 112, 245] : [240, 48, 88];
+    const outline = color.map((channel) => Math.round(channel * 0.55));
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const filled = hasInk(x, y, 2);
       const outlined = filled || hasInk(x, y, 4);
@@ -297,7 +298,7 @@ export function createView(container, hud, controls, mode = "projectile") {
       const light = Math.min(0.9, glint * 0.85 + sheen * 0.24 + (edge ? 0.12 : 0));
       const fill = color.map((channel) => Math.round(channel * (1.05 - v * 0.18) + (255 - channel) * light));
       const alpha = filled ? Math.round(Math.min(245, 140 + glint * 95 + sheen * 28 + (edge ? 80 : 0))) : outlined ? 255 : 0;
-      pixels.data.set([...(filled ? fill : [18, 25, 35]), alpha], (y * width + x) * 4);
+      pixels.data.set([...(filled ? fill : outline), alpha], (y * width + x) * 4);
     }
     context.putImageData(pixels, 0, 0);
     const texture = new THREE.CanvasTexture(canvas);
