@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRound, firePreview, selectCharacter } from "../src/combat.js";
-import { createDuel, lockEquation, setShapePhysics } from "../src/duel.js";
+import { createDuel, lockEquation, setShapePhysics, launchDuel, updateDuel } from "../src/duel.js";
+import { FIXED_STEP } from "../src/physics.js";
 import { buildPreview } from "../src/equations.js";
 import { chooseProjectileAction, scoreProjectileAction, chooseBumpAction,
   publicBumpState, scoreBumpAction, AI_LEVELS } from "../src/ai.js";
@@ -100,7 +101,7 @@ test("hidden Bump equations/locks cannot affect AI input or choice", async () =>
   assert.equal(duel.paths[0].expression, "2*sin(x/3)");
 });
 
-test("Bump obstacle scenario demonstrates different decision quality, not guaranteed wins", async () => {
+test("open Bump scenario rewards a stronger collision, while Medium and Hard may tie", async () => {
   const duel = createDuel();
   duel.players[0].position = { x: -8, y: 4, z: 0.5 };
   duel.players[1].position = { x: 8, y: 4, z: 0.5 };
@@ -109,7 +110,28 @@ test("Bump obstacle scenario demonstrates different decision quality, not guaran
     const expression = await chooseBumpAction(publicState, difficulty, options);
     scores.push(scoreBumpAction(publicState, expression, "0"));
   }
-  assert.ok(scores[0] < scores[1] && scores[1] < scores[2], JSON.stringify(scores));
+  assert.ok(scores[0] < scores[1] && scores[1] <= scores[2], JSON.stringify(scores));
+});
+
+test("all Bump AI levels seek contact instead of the formerly preferred passive route", async () => {
+  function fight(expression, crossed = false) {
+    const duel = createDuel();
+    if (crossed) { duel.players[0].position.x = 5; duel.players[1].position.x = -5; }
+    lockEquation(duel, 0, "0"); lockEquation(duel, 1, expression); launchDuel(duel);
+    for (let tick = 0; tick < 1000 && duel.phase === "running"; tick += 1) updateDuel(duel, FIXED_STEP);
+    return duel;
+  }
+  assert.equal(fight("0.2*x").contacts, 0, "Reproduce the old safe-but-passive miss.");
+  for (const difficulty of Object.keys(AI_LEVELS)) for (const crossed of [false, true]) {
+    const duel = createDuel();
+    if (crossed) { duel.players[0].position.x = 5; duel.players[1].position.x = -5; }
+    const publicState = publicBumpState(duel);
+    const expression = await chooseBumpAction(publicState, difficulty, options);
+    const result = fight(expression, crossed);
+    assert.ok(result.contacts > 0, difficulty + (crossed ? " after crossing" : " at spawn"));
+    assert.ok(result.players.every((player) => player.health === 100 && player.mass === 1));
+    assert.ok(scoreBumpAction(publicState, expression, "0") > scoreBumpAction(publicState, "0.2*x", "0"));
+  }
 });
 
 test("solo and online drawings share exactly the same mass/radius calculation", () => {

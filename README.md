@@ -49,14 +49,22 @@ Blue's equation, path or locks. Red commits independently and its fast-typed
 equation dialogue stays hidden until both choices lock. Projectile dialogue
 appears before firing. Neither mode displays predicted recoil/knockback distances.
 
+Bump AI actively chases the player: candidate curves target Blue, and scoring
+rewards closing the gap, real contact and knockouts rather than central retreat.
+It may accept a collision trade, but still penalizes falling without a useful hit.
+It never reads Blue's hidden choice. Both characters launch toward the rival's
+current horizontal side, so they can pursue each other after crossing. Preview
+and firing use that same direction; the captured path never homes during flight.
+
 Reproducible regressions in `tests/ai.test.js` compare the three levels at a
-projectile recoil edge and around Bump obstacles, checking decision quality
+projectile recoil edge and in open-summit Bump encounters, checking decision quality
 without treating those examples as a win-rate benchmark.
 
 ## Shared mountain and deliberate adaptations
 
 Both modes use `assets/mountain.glb`, its painted materials, cliff, foliage,
-clouds and ruins, plus the same warm lighting in `src/mountain.js`.
+clouds, water and sky, plus the same warm lighting in `src/mountain.js`.
+Projectile Duel retains the stone ruins; Bump hides them for a completely open summit.
 The editable `assets/mountain.blend` and `tools/build_mountain.py` generate the
 browser model. WebP textures and Meshopt geometry compression keep the GLB near
 1 MB; `build.js` ships only runtime images and the GLB, not the Blender source.
@@ -65,14 +73,13 @@ curve/grid clipping, and projectile edge collisions. The top is flat at Z=0;
 Z remains height. A character's centre leaving the rim loses support, as before.
 Lower cliff surfaces and the decorative outer rim are scenery, not landable ground.
 
-The original projectile collision boxes now appear as stone barriers in both
-modes, with exactly matching dimensions. Bump launches now stop at these solid
-barriers instead of passing through them; after contact knockback, characters
-also collide with the barriers. Projectile Duel's bullet speed/damage, Force and
+The projectile collision boxes appear as stone barriers in Projectile Duel,
+with exactly matching dimensions. Bump Duel has no visible walls and no wall
+colliders, during either launches or knockback. Projectile Duel's bullet speed/damage, Force and
 recoil are unchanged. Bump Duel's launch is slower (7.5 units/s with 2.25
 units/s² friction) while retaining the same 12.5-unit unobstructed distance.
-Bump's dotted path is still an unobstructed projection; a wall or rival can stop
-or alter actual travel.
+Bump's dotted path is still an unobstructed projection; contact with a rival can
+alter actual travel, and the cliff edge still causes falls.
 
 Projectile spawns are sampled safely inside the rounded summit, with a bounded
 fallback at x=±10 and y=−4.5,0,4.5. Bump spawns remain (−9.5,0) and (9.5,0).
