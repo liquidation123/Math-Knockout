@@ -188,3 +188,20 @@ test("static hosting starts a local dodge bot after ten seconds and launches wit
   assert.match(ui.element("#stage").textContent, /Round [12]/);
   assert.equal(ui.errors.length, 0);
 });
+
+test("Quick Match falls back to the browser bot when a configured backend never assigns a side", async () => {
+  const ui = setup({ pageUrl: "https://math-knockout.vercel.app/bump.html?quick=1",
+    serverUrl: "https://duel.example.com" });
+  ui.resolveMountain();
+  await flush();
+  ui.socket.emit("error");
+  ui.socket.emit("close");
+  assert.equal(ui.element("#retry").hidden, true);
+  ui.setNow(10001); ui.frame();
+  await flush();
+  ui.frame();
+  assert.match(ui.element("#red").textContent, /Bot · ready/);
+  assert.equal(ui.element("#loading").hidden, true);
+  assert.equal(ui.element("#invite").hidden, true);
+  assert.equal(ui.errors.length, 0);
+});

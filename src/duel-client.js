@@ -19,7 +19,10 @@ let state, previewLine, preview, lastKey = "", summitView = false, previewStarte
 let replayFrames = null, replayStarted = 0;
 let pathWasLocked = false;
 const localPage = ["localhost", "127.0.0.1", "[::1]"].includes(room.hostname);
-const solo = !localPage && !BUMP_SERVER_URL;
+const quick = room.searchParams.get("quick") === "1";
+const canFallback = !localPage && quick;
+const backendStart = Date.now();
+let solo = canFallback && !BUMP_SERVER_URL;
 let duel, soloStartAt = 0, previous = 0;
 const soloClock = { accumulator: 0 };
 if (solo) $("#invite").hidden = true;
@@ -54,13 +57,14 @@ const connectionHelp = localPage
   : "Online Bump Duel is unavailable. Please retry later or use Change mode to play Projectile Duel.";
 try {
   if (!solo) {
-  const address = new URL(duelSocketUrl(room.href));
-  const token = room.searchParams.get("room") && sessionStorage.getItem("duel:" + room.searchParams.get("room"));
-  if (token) address.searchParams.set("resume", token);
-  socket = new WebSocket(address.href);
+    if (!localPage && !BUMP_SERVER_URL) throw new Error("No online duel server is configured.");
+    const address = new URL(duelSocketUrl(room.href));
+    const token = room.searchParams.get("room") && sessionStorage.getItem("duel:" + room.searchParams.get("room"));
+    if (token) address.searchParams.set("resume", token);
+    socket = new WebSocket(address.href);
   }
 } catch (error) {
-  showConnectionError(connectionHelp, error);
+  if (!canFallback) showConnectionError(connectionHelp, error);
 }
 
 socket?.addEventListener("open", async () => {
@@ -181,10 +185,10 @@ function publishSolo() {
     startAt: soloStartAt, bot: !!duel.bot, botAt: duel.botAt });
 }
 
-async function startSolo() {
+async function startSolo(botNow = false) {
   duel = createDuel();
   const current = duel;
-  duel.botAt = Date.now() + 10000;
+  duel.botAt = Date.now() + (botNow ? 0 : 10000);
   soloStartAt = 0;
   previous = 0;
   soloClock.accumulator = 0;
@@ -215,9 +219,9 @@ socket?.addEventListener("message", ({ data }) => {
   }
   receiveState(message);
 });
-socket?.addEventListener("error", (error) => { if (!state) showConnectionError(connectionHelp, error); });
+socket?.addEventListener("error", (error) => { if (!state && !canFallback) showConnectionError(connectionHelp, error); });
 socket?.addEventListener("close", (event) => {
-  if (leaving || startupFailed) return;
+  if (leaving || startupFailed || solo || (canFallback && !state)) return;
   if (state?.token && event.code !== 1008) {
     $("#loading").hidden = false;
     $("#loading-message").textContent = "Connection interrupted. Rejoining your duel…";
@@ -263,6 +267,12 @@ $("#view").addEventListener("click", () => {
   $("#view").textContent = summitView ? "First person" : "Summit view";
 });
 function frame() {
+  if (canFallback && !solo && !state && !startupFailed && Date.now() - backendStart >= 10000) {
+    solo = true;
+    socket?.close();
+    $("#invite").hidden = true;
+    startSolo(true); // The player has already waited ten seconds for a match.
+  }
   if (solo && duel && mountainReady && !startupFailed) {
     const now = Date.now();
     if (!duel.bot && now >= duel.botAt) { duel.bot = true; duel.botAt = 0; }
