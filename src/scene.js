@@ -285,17 +285,19 @@ export function createView(container, hud, controls, mode = "projectile") {
       }
       return false;
     }
-    const color = index < (mode === "bump" ? 1 : 3) ? [45, 131, 218] : [217, 79, 105];
+    const color = index < (mode === "bump" ? 1 : 3) ? [24, 112, 245] : [240, 48, 88];
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const filled = hasInk(x, y, 2);
       const outlined = filled || hasInk(x, y, 4);
       const u = x / width, v = y / height;
-      const highlight = Math.exp(-(((u - 0.32) / 0.11) ** 2 + ((v - 0.24) / 0.075) ** 2));
-      const sheen = Math.exp(-(((u - 0.45) / 0.42) ** 2 + ((v - 0.18) / 0.2) ** 2));
-      const shade = 0.72 + (1 - v) * 0.34 - u * 0.06;
-      const gloss = Math.min(0.92, highlight * 0.8 + sheen * 0.16);
-      const fill = color.map((channel) => Math.min(255, Math.round(channel * shade + (255 - channel) * gloss)));
-      pixels.data.set([...(filled ? fill : [18, 25, 35]), outlined ? 255 : 0], (y * width + x) * 4);
+      const edge = filled && (x < 2 || y < 2 || x >= width - 2 || y >= height - 2 ||
+        !hasInk(x - 4, y, 2) || !hasInk(x + 4, y, 2) || !hasInk(x, y - 4, 2) || !hasInk(x, y + 4, 2));
+      const glint = Math.exp(-(((u - 0.3) / 0.12) ** 2 + ((v - 0.22) / 0.08) ** 2));
+      const sheen = Math.exp(-(((u - 0.46) / 0.43) ** 2 + ((v - 0.18) / 0.23) ** 2));
+      const light = Math.min(0.9, glint * 0.85 + sheen * 0.24 + (edge ? 0.12 : 0));
+      const fill = color.map((channel) => Math.round(channel * (1.05 - v * 0.18) + (255 - channel) * light));
+      const alpha = filled ? Math.round(Math.min(245, 140 + glint * 95 + sheen * 28 + (edge ? 80 : 0))) : outlined ? 255 : 0;
+      pixels.data.set([...(filled ? fill : [18, 25, 35]), alpha], (y * width + x) * 4);
     }
     context.putImageData(pixels, 0, 0);
     const texture = new THREE.CanvasTexture(canvas);
@@ -303,7 +305,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     const drawing = new THREE.Group();
     const aspect = width / height;
     const art = new THREE.Mesh(new THREE.PlaneGeometry(3.1 * Math.min(aspect, 1), 3.1 / Math.max(aspect, 1)),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.01, depthWrite: false, side: THREE.DoubleSide }));
     drawing.add(art);
     mesh.add(drawing);
     mesh.userData.drawing = drawing;
