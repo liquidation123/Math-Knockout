@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
+import { forwardDirection } from "../src/aiming.js";
 import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, resignDuel, safeTravelPath, setDuelBody, updateDuel } from "../src/duel.js";
 import { takeFixedSteps } from "../src/physics.js";
 import { duelSocketUrl } from "../src/duel-connection.js";
@@ -14,7 +15,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
   const nodes = new Map();
   const element = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
-      hidden: id === "#retry", disabled: true, textContent: "", value: "0", style: {},
+      hidden: id === "#retry", disabled: true, textContent: "", value: id === "#bump-force" ? "1" : "0", style: {},
       addEventListener(name, handler) { this[name] = handler; },
     });
     return nodes.get(id);
@@ -48,7 +49,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
       posthog: { capture: (name, properties) => analytics.push({ name, properties }) },
     },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
-    buildPreview, safeTravelPath, insideDuel, interceptSlope, sessionStorage, BUMP_SERVER_URL: serverUrl,
+    buildPreview, forwardDirection, safeTravelPath, insideDuel, interceptSlope, sessionStorage, BUMP_SERVER_URL: serverUrl,
     chooseBotEquation, createDuel, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel, takeFixedSteps,
     Date: FakeDate, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame(fn) { frames.push(fn); },
     console: { error: (...args) => errors.push(args) },
@@ -202,6 +203,36 @@ test("static hosting starts a local dodge bot after ten seconds and launches wit
   assert.equal(ui.element("#countdown").hidden, true);
   for (let time = 13102; time < 21302; time += 100) { ui.setNow(time); ui.frame(); }
   assert.match(ui.element("#stage").textContent, /Round [12]/);
+  assert.equal(ui.errors.length, 0);
+});
+
+test("Bump force is labelled, sent with the locked equation, and disabled after locking", async () => {
+  const ui = setup();
+  ui.resolveMountain(); ui.state(); await flush();
+  const force = ui.element("#bump-force");
+  assert.equal(force.disabled, false);
+  force.value = "1.8";
+  force.input();
+  assert.equal(ui.element("#bump-force-value").textContent, "1.8×");
+  ui.element("#form").submit({ preventDefault() {} });
+  assert.deepEqual(ui.socket.sent.at(-1), { type: "lock", expression: "0", force: 1.8 });
+  const state = createDuel();
+  state.locked[0] = true;
+  ui.message({ type: "state", side: 0, ...state });
+  assert.equal(force.disabled, true);
+});
+
+test("solo Bump force refreshes its landing preview without a multiplayer server", async () => {
+  const ui = setup({ pageUrl: "https://math-knockout.vercel.app/bump.html?quick=1" });
+  ui.resolveMountain(); await flush();
+  const force = ui.element("#bump-force");
+  force.value = ".5"; force.input();
+  const lowForceLanding = ui.element("#location").textContent;
+  force.value = "2"; force.input();
+  assert.notEqual(ui.element("#location").textContent, lowForceLanding);
+  ui.element("#form").submit({ preventDefault() {} });
+  assert.equal(force.disabled, true);
+  assert.equal(ui.socket, undefined);
   assert.equal(ui.errors.length, 0);
 });
 

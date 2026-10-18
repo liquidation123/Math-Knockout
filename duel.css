@@ -18,6 +18,10 @@ canvas { display: block; width: 100%; height: 100%; }
 .score { justify-content: space-between; border-top: 1px solid #e1eaed; margin-top: 10px; padding-top: 10px; font-size: 16px; font-weight: 750; }
 #blue { color: #247dc3; } #red { color: #dc5b62; } #stage { color: #547589; font-size: 13px; }
 #controls { bottom: 18px; }
+.force-control { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-weight: 700; font-size: 13px; }
+.force-control input { flex: 1; min-width: 80px; accent-color: #218bc9; }
+.force-control output { min-width: 34px; }
+.force-control small { color: #6f8795; font-weight: 400; }
 .control-top, .control-bottom { justify-content: space-between; }
 .control-top strong { color: #1b577b; font-size: 14px; }
 .control-top span, .control-bottom span { color: #6f8795; font-size: 11px; }

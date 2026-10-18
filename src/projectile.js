@@ -1,6 +1,7 @@
 import { COMBAT_Z, buildTrajectory } from "./equations.js";
 import { OBSTACLES, PLAYER_SIZE, applyKnockback } from "./physics.js";
 import { clipArenaSegment } from "./terrain.js";
+import { shotDirection } from "./aiming.js";
 
 export const DAMAGE = 20;
 // Make even the lowest Force visibly move a one-unit cube against ground friction.
@@ -16,7 +17,7 @@ export const PROJECTILE_RADIUS = 0.12;
 
 export function createAttack(attackerIndex, players, equation, time, preview = null, force = DEFAULT_FORCE) {
   const attacker = players[attackerIndex];
-  const trajectory = preview || buildTrajectory(equation, attacker.position, attacker.team === 0 ? 1 : -1);
+  const trajectory = preview || buildTrajectory(equation, attacker.position, shotDirection(players, attackerIndex));
   const origin = trajectory.origin;
   const path = trajectory.path.map((point) => ({ ...point }));
   const capturedForce = Number.isFinite(force)

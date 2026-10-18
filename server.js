@@ -11,6 +11,10 @@ import { posthogServerLogger } from "./src/posthog-server-logs.js";
 const root = fileURLToPath(new URL(".", import.meta.url));
 let port = Number(process.env.PORT || 5173);
 const host = process.env.HOST || "127.0.0.1";
+let devVersion = process.env.OUT_MATHED_DEV_VERSION;
+if (devVersion) process.on("message", (message) => {
+  if (message.type === "dev-reload") devVersion = message.version;
+});
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",
@@ -27,6 +31,11 @@ const types = {
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://localhost");
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
+  if (devVersion && pathname === "/__dev/version") {
+    response.writeHead(200, { "Content-Type": "text/plain", "Cache-Control": "no-store" });
+    response.end(devVersion);
+    return;
+  }
   if (pathname === "/posthog-config.json") {
     response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
     response.end(JSON.stringify({
@@ -50,7 +59,10 @@ const server = createServer(async (request, response) => {
       response.writeHead(304, { ETag: etag }).end();
       return;
     }
-    const content = await readFile(filename);
+    let content = await readFile(filename);
+    if (devVersion && extname(filename) === ".html") {
+      content = content.toString().replace("</body>", '<script type="module" src="/dev/client.js?version=' + devVersion + '"></script></body>');
+    }
     response.writeHead(200, {
       "Content-Type": types[extname(filename)] || "application/octet-stream",
       "Cache-Control": asset ? "public, max-age=0, must-revalidate" : "no-store",
@@ -136,7 +148,7 @@ sockets.on("connection", (socket, request) => {
     try { message = JSON.parse(bytes); } catch { return; }
     if (!message || typeof message !== "object") return;
     if (message.type === "lock") {
-      const error = lockEquation(room.duel, side, String(message.expression || ""));
+      const error = lockEquation(room.duel, side, String(message.expression || ""), message.force ?? 1);
       if (error) return send(socket, { type: "error", error });
       // The bot picks from public positions, never the hidden human equation.
       if (room.bot) lockEquation(room.duel, 1, chooseBotEquation(room.duel));

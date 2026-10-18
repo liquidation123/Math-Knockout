@@ -5,6 +5,7 @@ import { createView } from "./scene.js";
 import { takeFixedSteps } from "./physics.js";
 import { createRound, updateRound, firePreview, resignRound, selectCharacter, TEAM_NAMES } from "./combat.js";
 import { buildPreview } from "./equations.js";
+import { shotDirection } from "./aiming.js";
 import { chooseProjectileAction } from "./ai.js";
 import { createOpponentUI } from "./opponent-ui.js";
 
@@ -104,10 +105,11 @@ function refreshPreview() {
   const index = round.selected[round.currentTeam];
   const player = round.players[index];
   const origin = player.position;
-  const key = equationInput.key() + "|" + index + "|" + origin.x + "," + origin.y + "|" + Boolean(round.result);
+  const direction = shotDirection(round.players, index);
+  const key = equationInput.key() + "|" + index + "|" + origin.x + "," + origin.y + "|" + direction + "|" + Boolean(round.result);
   if (key === previewKey) return;
   previewKey = key;
-  preview = round.result || (opponent.isAI && round.currentTeam === 1) ? null : equationInput.preview(origin, player.team === 0 ? 1 : -1);
+  preview = round.result || (opponent.isAI && round.currentTeam === 1) ? null : equationInput.preview(origin, direction);
   if (previewCurve) view.removeCurve(previewCurve);
   if (branchCurve) view.removeCurve(branchCurve);
   branchCurve = preview?.selection ? view.drawCurve(preview.sections, 0x71849e, true) : null;
@@ -180,7 +182,7 @@ async function playAiTurn() {
     if (!selectCharacter(round, action.playerIndex)) return;
     if (!await opponent.speak(player.name, `y = ${action.expression} · Force ${action.force}×`, token)) return;
     if (!opponent.current(token) || player.eliminated || round.result) return;
-    const aim = buildPreview(action.expression, player.position, -1);
+    const aim = buildPreview(action.expression, player.position, shotDirection(round.players, action.playerIndex, action.targetIndex));
     firePreview(round, action.playerIndex, aim, action.force);
   } catch (error) {
     if (opponent.current(token)) { aiFailed = true; round.message = "AI could not choose. Restart to retry."; console.error("Projectile AI:", error); }

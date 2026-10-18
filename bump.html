@@ -22,6 +22,7 @@
     <section id="controls" class="panel" aria-label="Equation launcher">
       <div class="control-top"><strong id="side">Finding your side…</strong><span id="location">Your landing point appears on the mountain.</span></div>
       <form id="form"><label for="equation"><i aria-hidden="true"></i> y =</label><input id="equation" class="math-input" value="0" maxlength="200" autocomplete="off" spellcheck="false" aria-describedby="error location" disabled><button id="lock" type="submit" disabled>Lock in</button></form>
+      <label class="force-control" for="bump-force">Force <input id="bump-force" type="range" min="0.5" max="3" step="0.1" value="1" disabled><output id="bump-force-value" for="bump-force">1.0×</output><small>Higher force launches you forward faster.</small></label>
       <div class="examples" aria-label="Suggested paths"><span>Assuming a straight rival path</span><button type="button" data-aim="direct">Intercept</button><button type="button" data-aim="flank">Glance</button><span id="error" role="status"></span></div>
       <div class="control-bottom"><span>Click the arena to look around · Esc releases mouse</span><button id="view" type="button" disabled>Summit view</button><button id="resign" type="button" disabled>Resign</button><button id="reset" type="button" disabled>Restart</button></div>
     </section>

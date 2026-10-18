@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { OBSTACLES } from "./physics.js";
+import { createErodingIsland } from "./erosion.js";
 
 export function createMountain(scene) {
   scene.background = null;
@@ -69,6 +70,12 @@ export function createMountain(scene) {
         }
       });
       scene.add(gltf.scene);
+      if (scene.userData.duelRadius != null) {
+        const island = createErodingIsland(gltf.scene);
+        island.setRadius(scene.userData.duelRadius);
+        scene.add(island);
+        scene.userData.erodingIsland = island;
+      }
       resolve();
     }, undefined, reject);
   });
