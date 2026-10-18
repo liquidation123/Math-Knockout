@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
-import { createDuel, travelPath, lockEquation, launchDuel, updateDuel, inkFromMask, setShapePhysics, bumpDirection } from "../src/duel.js";
+import { createDuel, travelPath, lockEquation, launchDuel, updateDuel, inkFromMask, setShapePhysics } from "../src/duel.js";
 import { insideArena, takeFixedSteps } from "../src/physics.js";
 import { publicBumpState } from "../src/ai.js";
 import { duelSocketUrl } from "../src/duel-connection.js";
@@ -48,7 +48,7 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     URL, location: new URL(pageUrl),
     document: { querySelector: element, querySelectorAll: () => [] }, window: { addEventListener(name, handler) { windowEvents[name] = handler; } },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
-    buildPreview, travelPath, insideArena, takeFixedSteps, createDuel, lockEquation, launchDuel, updateDuel, inkFromMask, setShapePhysics, bumpDirection,
+    buildPreview, travelPath, insideArena, takeFixedSteps, createDuel, lockEquation, launchDuel, updateDuel, inkFromMask, setShapePhysics,
     createOpponentUI: () => opponent, publicBumpState, chooseBumpAction,
     duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame(fn) { if (fn.name === "frame") frames.push(fn); },
     console: { error: (...args) => errors.push(args), warn() {} },

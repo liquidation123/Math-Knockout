@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDuel, lockEquation, launchDuel, travelPath, updateDuel, bumpDirection } from "../src/duel.js";
-import { buildPreview } from "../src/equations.js";
+import { createDuel, lockEquation, launchDuel, travelPath, updateDuel } from "../src/duel.js";
 import { FIXED_STEP } from "../src/physics.js";
 
 function run(blue, red) {
@@ -56,21 +55,4 @@ test("an invalid equation cannot lock or launch", () => {
 test("preview stops at the same friction-limited travel distance", () => {
   const points = travelPath([{ x: 0, y: 0, z: 0.5 }, { x: 20, y: 0, z: 0.5 }]);
   assert.equal(points.at(-1).x, 12.5);
-});
-
-test("both players turn toward the rival after crossing; preview and captured paths agree", () => {
-  const duel = createDuel();
-  duel.players[0].position.x = 6;
-  duel.players[1].position.x = -6;
-  for (const side of [0, 1]) {
-    const direction = bumpDirection(duel.players, side);
-    assert.equal(direction, side === 0 ? -1 : 1);
-    const preview = buildPreview("0", duel.players[side].position, direction);
-    assert.equal(lockEquation(duel, side, "0"), "");
-    assert.deepEqual(duel.paths[side].points, preview.path);
-    assert.ok((duel.paths[side].points[1].x - duel.players[side].position.x) * direction > 0);
-  }
-  launchDuel(duel);
-  for (let tick = 0; tick < 120; tick += 1) updateDuel(duel, FIXED_STEP);
-  assert.ok(duel.contacts > 0, "The crossed characters can actually meet again.");
 });

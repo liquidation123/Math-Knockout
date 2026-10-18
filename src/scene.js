@@ -130,7 +130,7 @@ export function createView(container, hud, controls, mode = "projectile") {
     lookPitch = Math.max(-1.2, Math.min(1.2, lookPitch - event.movementY * 0.0025));
   });
 
-  const ready = createMountain(scene, mode);
+  const ready = createMountain(scene);
 
   const gridLines = new THREE.LineSegments(
     new THREE.BufferGeometry(),
