@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { buildPreview } from "../src/equations.js";
-import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, safeTravelPath, setDuelBody, updateDuel } from "../src/duel.js";
+import { chooseBotEquation, createDuel, insideDuel, interceptSlope, launchDuel, lockEquation, resignDuel, safeTravelPath, setDuelBody, updateDuel } from "../src/duel.js";
 import { takeFixedSteps } from "../src/physics.js";
 import { duelSocketUrl } from "../src/duel-connection.js";
 
@@ -44,11 +44,12 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     URL, location: new URL(pageUrl),
     document: { querySelector: element, querySelectorAll: () => [] }, window: {
       addEventListener(name, handler) { windowEvents[name] = handler; },
+      confirm: () => true,
       posthog: { capture: (name, properties) => analytics.push({ name, properties }) },
     },
     createView: () => view, WebSocket: FakeSocket, readSavedMask: async () => null,
     buildPreview, safeTravelPath, insideDuel, interceptSlope, sessionStorage, BUMP_SERVER_URL: serverUrl,
-    chooseBotEquation, createDuel, launchDuel, lockEquation, setDuelBody, updateDuel, takeFixedSteps,
+    chooseBotEquation, createDuel, launchDuel, lockEquation, resignDuel, setDuelBody, updateDuel, takeFixedSteps,
     Date: FakeDate, duelSocketUrl: (url) => duelSocketUrl(url, serverUrl), requestAnimationFrame(fn) { frames.push(fn); },
     console: { error: (...args) => errors.push(args) },
   });
@@ -61,6 +62,21 @@ function setup({ pageUrl = "http://localhost/bump.html?room=test-room", serverUr
     } };
 }
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test("Bump resignation sends one action and displays the server's result", async () => {
+  const ui = setup();
+  ui.resolveMountain();
+  await flush();
+  const duel = createDuel();
+  ui.message({ type: "state", side: 1, ...duel });
+  ui.element("#resign").click();
+  assert.deepEqual(ui.socket.sent, [{ type: "resign" }]);
+  resignDuel(duel, 1);
+  ui.message({ type: "state", side: 1, ...duel });
+  assert.equal(ui.element("#result-title").textContent, "You resigned");
+  assert.match(ui.element("#result-detail").textContent, /Red resigned.*Blue wins/);
+  assert.equal(ui.element("#resign").disabled, true);
+});
 
 test("Bump analytics records lock and completion once even when repeated states share mutable arrays", () => {
   const ui = setup();

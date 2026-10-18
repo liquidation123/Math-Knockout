@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chooseBotEquation, createDuel, insideDuel, interceptSlope, lockEquation, launchDuel,
+import { chooseBotEquation, createDuel, insideDuel, interceptSlope, lockEquation, launchDuel, resignDuel,
   safeTravelPath, setDuelBody, travelDistance, travelPath, updateDuel } from "../src/duel.js";
 import { FIXED_STEP } from "../src/physics.js";
 import { bodyFromMask, starterMask } from "../src/body.js";
@@ -13,6 +13,17 @@ function run(blue, red) {
   for (let i = 0; i < 1200 && duel.phase === "running"; i++) updateDuel(duel, FIXED_STEP);
   return duel;
 }
+
+test("resigning ends a duel immediately and cannot overwrite its winner", () => {
+  const duel = createDuel();
+  assert.equal(resignDuel(duel, 0), true);
+  assert.equal(duel.phase, "finished");
+  assert.equal(duel.winner, "Red");
+  assert.equal(duel.resignedBy, 0);
+  assert.equal(resignDuel(duel, 1), false);
+  updateDuel(duel, FIXED_STEP);
+  assert.equal(duel.winner, "Red");
+});
 
 test("two hidden choices are required before a simultaneous launch", () => {
   const duel = createDuel();
