@@ -4,6 +4,13 @@ import { ARENA, PLAYER_SIZE, applyImpulse, createPlayer, insideArena, movePlayer
 const LAUNCH_SPEED = 7.5;
 const LAUNCH_FRICTION = 2.25; // Distance = speed²/(2·friction) = 12.5 units.
 
+export const inkFromMask = (mask) => (mask.match(/1/g) || []).length * 100 / 10240;
+export function setShapePhysics(player, mask) {
+  const ink = Math.min(20, inkFromMask(mask));
+  player.mass = 0.8 + 0.06 * ink;
+  player.radius = 0.25 + 0.55 * Math.sqrt(ink / 20);
+}
+
 export function createDuel() {
   return {
     players: [createPlayer("Blue", -9.5, 0, 0.5, 0), createPlayer("Red", 9.5, 0, 0.5, 1)],

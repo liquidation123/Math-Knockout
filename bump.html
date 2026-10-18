@@ -6,6 +6,7 @@
   <title>Out-Mathed — Bump Duel</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/duel.css">
+  <link rel="stylesheet" href="/opponent.css">
   <script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/","math-expression-evaluator":"/src/math-parser-browser.js"}}</script>
 </head>
 <body>
@@ -15,6 +16,9 @@
     <header id="hud" class="panel">
       <div class="brand"><h1>out-mathed <span>/ BUMP DUEL</span></h1><a class="mode-link" href="/">Change mode</a><strong id="phase">Connecting…</strong><button id="invite" type="button">Invite friend ↗</button></div>
       <p class="character-note" id="character-note">Playing with the starter character · <a href="/create.html?mode=bump">Draw your own</a></p>
+      <div class="opponent-row"><label for="opponent">Opponent</label><select id="opponent"><option value="human">Human opponent</option><option value="easy">Easy AI</option><option value="medium">Medium AI</option><option value="hard">Hard AI</option></select><span id="opponent-help"></span></div>
+      <p id="ai-thinking" role="status" hidden>AI is choosing…</p>
+      <aside id="ai-dialogue" aria-label="Red character dialogue" hidden><strong id="ai-speaker"></strong><span id="ai-speech"></span></aside>
       <div class="score"><span id="blue">Blue · waiting</span><span id="round-hint">Hidden choices · simultaneous launch</span><span id="red">Red · waiting</span></div>
     </header>
     <div id="countdown" aria-live="assertive" hidden><small>Both paths are locked</small><strong>3</strong><small>Get ready to launch</small></div>

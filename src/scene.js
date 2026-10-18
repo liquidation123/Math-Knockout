@@ -67,6 +67,23 @@ function starterMask(index, mode) {
   return Array.from({ length: 10240 }, (_, i) => pixels[i * 4 + 3] ? "1" : "0").join("");
 }
 
+export function createAimGeometry(points, width) {
+  const vertices = [];
+  for (let index = 1; index < points.length; index += 1) {
+    const a = points[index - 1], b = points[index];
+    const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy);
+    if (!length) continue;
+    // A flat ribbon gives real width; WebGL's ordinary lines are usually one pixel.
+    const nx = -dy / length * width / 2, ny = dx / length * width / 2;
+    const leftA = [a.x + nx, a.y + ny, a.z], rightA = [a.x - nx, a.y - ny, a.z];
+    const leftB = [b.x + nx, b.y + ny, b.z], rightB = [b.x - nx, b.y - ny, b.z];
+    vertices.push(...leftA, ...rightA, ...leftB, ...leftB, ...rightA, ...rightB);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  return geometry;
+}
+
 export function createView(container, hud, controls, mode = "projectile") {
   const scene = new THREE.Scene();
 
@@ -511,6 +528,16 @@ export function createView(container, hud, controls, mode = "projectile") {
   function drawCurve(sections, color, preview = false) {
     const group = new THREE.Group();
     for (const points of clipCurveSections(sections)) {
+      if (preview === "aim") {
+        for (const [width, tint, order] of [[0.42, 0x10283c, 2], [0.22, color, 3]]) {
+          const material = new THREE.MeshBasicMaterial({ color: tint, side: THREE.DoubleSide, depthTest: false, depthWrite: false, fog: false, toneMapped: false });
+          material.clippingPlanes = curveBounds;
+          const ribbon = new THREE.Mesh(createAimGeometry(points, width), material);
+          ribbon.renderOrder = order;
+          group.add(ribbon);
+        }
+        continue;
+      }
       const geometry = new THREE.BufferGeometry().setFromPoints(
         points.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
       );

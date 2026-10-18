@@ -11,7 +11,7 @@ await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 for (const file of [
   "index.html", "create.html", "play.html", "bump.html", "victory.html",
-  "style.css", "create.css", "game.css", "duel.css", "victory.css", "create.js", "src",
+  "style.css", "create.css", "game.css", "duel.css", "opponent.css", "victory.css", "create.js", "src",
 ]) {
   await cp(new URL(file, root), new URL(file, output), { recursive: true });
 }
@@ -50,6 +50,6 @@ await writeFile(parser, (await readFile(parser, "utf8"))
 const connection = new URL("src/duel-connection.js", output);
 await writeFile(connection, (await readFile(connection, "utf8"))
   .replace('export const BUMP_SERVER_URL = "";', "export const BUMP_SERVER_URL = " + JSON.stringify(bumpServerUrl) + ";"));
-if (!bumpServerUrl) console.warn("Bump Duel: BUMP_SERVER_URL is unset. This static build needs a live multiplayer server; npm start on your computer does not start one on Vercel.");
+if (!bumpServerUrl) console.warn("Bump Duel: solo AI works on static hosting. Online Human matches need BUMP_SERVER_URL pointing to a live multiplayer server.");
 
 console.log("Built Out-Mathed in dist/ (homepage, character creator, arena, and browser libraries).");

@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { createDuel, launchDuel, lockEquation, updateDuel } from "./src/duel.js";
+import { createDuel, launchDuel, lockEquation, updateDuel, inkFromMask, setShapePhysics } from "./src/duel.js";
 import { takeFixedSteps } from "./src/physics.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
@@ -52,12 +52,6 @@ const server = createServer(async (request, response) => {
 const sockets = new WebSocketServer({ server, maxPayload: 16000 });
 const rooms = new Map();
 const send = (socket, message) => socket?.readyState === 1 && socket.send(JSON.stringify(message));
-const inkFromMask = (mask) => (mask.match(/1/g) || []).length * 100 / 10240;
-function setShapePhysics(player, mask) {
-  const ink = Math.min(20, inkFromMask(mask));
-  player.mass = 0.8 + 0.06 * ink;
-  player.radius = 0.25 + 0.55 * Math.sqrt(ink / 20);
-}
 
 function publish(room) {
   room.clients.forEach((socket, side) => send(socket, {

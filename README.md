@@ -22,6 +22,37 @@ tab's session storage. No combat state is shared between the two entry points.
 Older mountain invite links using `/play.html?room=...` redirect to Bump Duel
 with the same room ID; plain `/play.html` always starts Projectile Duel.
 
+## AI opponents
+
+Both game pages have an **Opponent** selector. Human is the default; AI matches
+always put you on Blue and the AI on Red. Changing that selector reloads a fresh
+match and cancels pending decisions/dialogue. Drawings and human equation types
+are preserved. Projectile aiming now uses a bright yellow ribbon with a dark
+outline, centered on exactly the original sampled trajectory.
+
+- **Easy** uses approximate lines, normal Force and occasional controlled aiming errors.
+- **Medium** compares a few lines, arcs and waves with the existing collision/physics simulation.
+- **Hard** compares more curves and forces, penalizes unsafe recoil/landings, and
+  chooses the best predicted result. It has no health, damage, speed or mass bonus.
+
+Projectile search checks at most 81 choices (Medium 36); each uses at most eight
+seconds of fixed-step simulation. Bump search checks at most ten curves against
+four hypothetical public-state Blue choices. Each trial yields to the browser;
+no external AI, API keys or new dependencies are used. These bounded predictions
+are imperfect and Hard is not guaranteed to win.
+
+Solo Bump runs entirely in the browser using `createDuel`, `lockEquation`,
+`launchDuel` and `updateDuel`. It needs no multiplayer server, including in the
+static build. **Human** Bump still uses the configured WebSocket server and
+invite rooms. AI decisions receive only a copy of public character state, never
+Blue's equation, path or locks. Red commits independently and its fast-typed
+equation dialogue stays hidden until both choices lock. Projectile dialogue
+appears before firing. Neither mode displays predicted recoil/knockback distances.
+
+Reproducible regressions in `tests/ai.test.js` compare the three levels at a
+projectile recoil edge and around Bump obstacles, checking decision quality
+without treating those examples as a win-rate benchmark.
+
 ## Shared mountain and deliberate adaptations
 
 Both modes use `assets/mountain.glb`, its painted materials, cliff, foliage,
