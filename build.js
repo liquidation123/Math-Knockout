@@ -36,12 +36,17 @@ for (const [source, destination] of [
 ]) {
   await cp(new URL("node_modules/" + source, root), new URL("vendor/" + destination, output));
 }
+// MathLive (the Desmos-style equation boxes) loads its fonts from a folder next to the module.
+for (const file of ["mathlive.min.mjs", "fonts", "LICENSE.txt"]) {
+  await cp(new URL("node_modules/mathlive/" + file, root), new URL("vendor/mathlive/" + file, output), { recursive: true });
+}
 
 for (const name of ["play.html", "bump.html"]) {
   const page = new URL(name, output);
   await writeFile(page, (await readFile(page, "utf8"))
     .replace("/node_modules/three/build/three.module.js", "/vendor/three/three.module.js")
-    .replace("/node_modules/three/examples/jsm/", "/vendor/three/addons/"));
+    .replace("/node_modules/three/examples/jsm/", "/vendor/three/addons/")
+    .replace("/node_modules/mathlive/mathlive.min.mjs", "/vendor/mathlive/mathlive.min.mjs"));
 }
 const parser = new URL("src/math-parser-browser.js", output);
 await writeFile(parser, (await readFile(parser, "utf8"))

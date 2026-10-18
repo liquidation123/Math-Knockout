@@ -16,81 +16,73 @@ main::before {
 }
 #arena { position: absolute; inset: 0; }
 canvas { display: block; width: 100%; height: 100%; }
+/* ---------- Panels: wide, short bands so the arena gets most of the height ----------
+   They use the home page's mode-card look: translucent navy, cream outline, rounded. */
 .panel {
   position: absolute; z-index: 1; left: 12px; right: 12px;
-  width: min(640px, calc(100% - 24px)); margin: 0 auto; padding: 10px 14px;
-  background: #101b2aee; border: 1px solid #40526b; border-radius: 9px;
+  width: min(1480px, calc(100% - 24px)); margin: 0 auto; padding: 8px 12px;
+  border: 1px solid #fff8e873; border-radius: 18px; background: #113d5ee0; color: #fff8e8;
+  box-shadow: 0 14px 30px #02243740; backdrop-filter: blur(8px);
 }
-#hud { top: 12px; }
-.mode-link { color: #ffefb3; font-size: 12px; text-underline-offset: 3px; }
-#loading { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); padding: 12px; background: #101b2aee; border-radius: 8px; }
-#controls { bottom: 12px; max-height: 45dvh; overflow-y: auto; }
-.title-row, .team-heading, .turn-row, .equation-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+#loading { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); padding: 12px; background: #113d5ee0; border-radius: 12px; }
+h1, .turn-row strong, .team-heading strong, .round-clock strong {
+  font-family: ui-rounded, "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif; font-weight: 900;
 }
-h1 { margin: 0; font-size: 21px; }
-.teams { display: flex; gap: 24px; margin-top: 8px; }
-.team { flex: 1; min-width: 0; }
-.team-heading span { color: #bac5d5; font-size: 11px; }
+p { margin: 6px 0 0; font-size: 12px; line-height: 1.35; }
+.team-heading, .turn-row, .equation-row { display: flex; align-items: center; gap: 8px; }
+button {
+  flex-shrink: 0; border: 1px solid #ffffff1f; border-radius: 999px;
+  background: #ffffff0d; color: white; padding: 4px 12px; cursor: pointer;
+}
+button:hover { background: #76b7ff26; border-color: #76b7ff66; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #76b7ff; outline-offset: 2px; }
+/* Cream pill with gold + navy "3D" edge, like the home page's play buttons. */
+#restart, #fire {
+  border: 3px solid #0e395a; color: #123b5d; font-weight: 900;
+  background: linear-gradient(180deg, #fff9ed, #fff1d5);
+  box-shadow: 0 3px 0 #f8b22e, 0 6px 0 #0c3552; transition: transform 0.12s, box-shadow 0.12s;
+}
+#restart:hover, #fire:hover:not(:disabled) { background: #fffdf5; transform: translateY(2px); box-shadow: 0 1px 0 #f8b22e, 0 4px 0 #0c3552; }
+#restart:active, #fire:active:not(:disabled) { transform: translateY(5px); box-shadow: 0 0 0 #f8b22e, 0 1px 0 #0c3552; }
+[hidden] { display: none !important; }
+
+/* ---------- Top HUD: title | Blue + Red team cards | clock + buttons ---------- */
+#hud {
+  top: 10px; display: grid; align-items: center; gap: 14px;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 4fr) auto;
+}
+#hud h1 { margin: 0; color: #fff3d9; font-size: 20px; line-height: 1.1; text-shadow: 0 2px 0 #062b49; }
+.character-note { margin: 3px 0 0; color: #d7e7f2; font-size: 11px; }
+.character-note a { color: #ffd77a; font-weight: 700; }
+.teams { display: flex; gap: 10px; }
+.team { flex: 1; min-width: 0; padding: 6px 10px 7px; border-radius: 12px; border: 1px solid; }
+.team.blue { background: linear-gradient(180deg, #76b7ff1c, #76b7ff08); border-color: #76b7ff38; }
+.team.red { background: linear-gradient(180deg, #ff8c991c, #ff8c9908); border-color: #ff8c9938; }
+.team-heading strong { margin-right: auto; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
 .blue strong { color: #76b7ff; }
 .red strong { color: #ff8c99; }
-progress { display: block; width: 100%; height: 5px; border: 0; margin: 5px 0; }
-progress::-webkit-progress-bar { background: #2a3547; }
+.team-heading span {
+  padding: 1px 8px; border-radius: 999px; background: #0004;
+  color: #d7e7f2; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.team-heading .shots { color: #ffd77a; }
+progress { display: block; width: 100%; height: 5px; margin: 5px 0; border: 0; border-radius: 999px; overflow: hidden; }
+progress::-webkit-progress-bar { background: #0006; border-radius: 999px; }
+progress::-webkit-progress-value { border-radius: 999px; transition: width 0.3s; }
 .blue progress::-webkit-progress-value { background: #76b7ff; }
 .red progress::-webkit-progress-value { background: #ff8c99; }
 .blue progress::-moz-progress-bar { background: #76b7ff; }
 .red progress::-moz-progress-bar { background: #ff8c99; }
-.character-list { white-space: pre-line; font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
-
-/* Panels use the home page's mode-card look: translucent navy, cream outline, rounded. */
-#hud, #controls {
-  padding: 12px 14px; border-radius: 20px; border-color: #fff8e873;
-  background: #113d5ee0; color: #fff8e8;
-  box-shadow: 0 14px 30px #02243740;
-  backdrop-filter: blur(8px);
-}
-#hud h1, #controls .turn-row strong, #hud .team-heading strong {
-  font-family: ui-rounded, "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif; font-weight: 900;
-}
-#hud .title-row { justify-content: flex-start; }
-#hud h1 { margin-right: auto; color: #fff3d9; font-size: 20px; letter-spacing: 0.01em; text-shadow: 0 2px 0 #062b49; }
-/* Outline pill, like the home page's "How to play" button. */
-#hud .mode-link {
-  padding: 5px 12px; border: 1px solid #fff8e8ad; border-radius: 999px; background: #04355e33;
-  color: #fff8e8; text-decoration: none; font-size: 10px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
-}
-#hud .mode-link:hover { background: #04355e80; }
-/* Cream pill with gold + navy "3D" edge, like the home page's play buttons. */
-#restart, #fire {
-  border: 3px solid #0e395a; border-radius: 999px; color: #123b5d; font-weight: 900;
-  background: linear-gradient(180deg, #fff9ed, #fff1d5);
-  box-shadow: 0 3px 0 #f8b22e, 0 6px 0 #0c3552; transition: transform 0.12s, box-shadow 0.12s;
-}
-#restart { margin-bottom: 6px; padding: 4px 14px; }
-#restart:hover, #fire:hover:not(:disabled) { background: #fffdf5; transform: translateY(2px); box-shadow: 0 1px 0 #f8b22e, 0 4px 0 #0c3552; }
-#restart:active, #fire:active:not(:disabled) { transform: translateY(5px); box-shadow: 0 0 0 #f8b22e, 0 1px 0 #0c3552; }
-#hud .character-note { margin: 6px 0 0; color: #d7e7f2; font-size: 12px; }
-#hud .character-note a { color: #ffd77a; }
-#hud .teams { gap: 10px; margin-top: 10px; }
-#hud .team {
-  padding: 8px 10px; border-radius: 12px;
-  background: #ffffff08; border: 1px solid #ffffff12;
-}
-#hud .team.blue { background: linear-gradient(180deg, #76b7ff1c, #76b7ff08); border-color: #76b7ff38; }
-#hud .team.red { background: linear-gradient(180deg, #ff8c991c, #ff8c9908); border-color: #ff8c9938; }
-#hud .team-heading strong { font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
-#hud .team-heading span { padding: 2px 8px; border-radius: 999px; background: #0004; font-variant-numeric: tabular-nums; }
-#hud progress { height: 6px; margin: 7px 0; border-radius: 999px; overflow: hidden; }
-#hud progress::-webkit-progress-bar { background: #0006; border-radius: 999px; }
-#hud progress::-webkit-progress-value { border-radius: 999px; transition: width 0.3s; }
-#hud .character-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; white-space: normal; }
+/* One chip per character (built in main.js): name, HP and a mini health bar. */
+.character-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .member {
-  position: relative; display: flex; flex-direction: column; gap: 1px;
-  padding: 4px 6px 6px; border-radius: 6px; background: #0003;
-  border: 1px solid transparent; overflow: hidden;
+  position: relative; display: flex; align-items: baseline; justify-content: space-between; gap: 4px;
+  padding: 2px 7px 4px; border-radius: 6px; border: 1px solid transparent;
+  background: #0003; font-variant-numeric: tabular-nums; overflow: hidden;
 }
 .member b { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.member span { color: #bac5d5; font-size: 10px; }
+.member span { color: #bac5d5; font-size: 10px; white-space: nowrap; }
 /* Mini health bar: its width is the character's health fraction (--hp from 0 to 1). */
 .member i {
   position: absolute; left: 0; bottom: 0; height: 2px;
@@ -102,143 +94,145 @@ progress::-webkit-progress-bar { background: #2a3547; }
 .member.selected b { color: #ffef8b; }
 .member.out { opacity: 0.4; }
 .member.out b { text-decoration: line-through; }
+.hud-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+/* Round clock in the top-right corner: a cream badge like the home page buttons. */
+.round-clock {
+  display: flex; align-items: baseline; gap: 6px; padding: 2px 12px;
+  border: 3px solid #0e395a; border-radius: 12px; background: #fff3d9; color: #123b5d;
+  box-shadow: 0 3px 0 #0c3552;
+}
+.round-clock span { font-size: 10px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
+.round-clock strong { min-width: 2.6em; font-size: 20px; text-align: right; font-variant-numeric: tabular-nums; }
+.hud-actions { display: flex; align-items: center; gap: 6px; }
+/* Outline pill, like the home page's "How to play" button. */
+.mode-link {
+  padding: 4px 11px; border: 1px solid #fff8e8ad; border-radius: 999px; background: #04355e33;
+  color: #fff8e8; text-decoration: none; font-size: 10px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.mode-link:hover { background: #04355e80; }
+#restart { padding: 2px 12px; font-size: 12px; }
 
-/* Bottom equation panel: same glass style as the HUD, scoped to #controls. */
-#controls { scrollbar-width: thin; scrollbar-color: #ffffff30 transparent; }
-#controls .turn-row { margin-bottom: 6px; font-size: 14px; }
-#controls #caster:not(:empty) {
-  padding: 2px 9px; border: 1px solid #ffef8b66; border-radius: 999px;
-  background: #ffef8b14; font-weight: 600;
+/* ---------- Bottom controls: equation (left) | force, fire and status (right) ---------- */
+#controls {
+  bottom: 10px; display: grid; align-items: start; gap: 6px 18px;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
+  max-height: 45dvh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ffffff30 transparent;
 }
-#controls .type-row label {
-  color: #e3f5fa; font-size: 11px; font-weight: 900;
-  letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
+/* Left column: the turn and equation type share the first line. */
+.controls-main { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px 14px; min-width: 0; }
+.controls-main > :not(.turn-row, .type-row) { grid-column: 1 / -1; }
+.controls-main > p { margin: 0; }
+.turn-row { font-size: 14px; white-space: nowrap; }
+#caster:not(:empty) {
+  padding: 1px 9px; border: 1px solid #ffef8b66; border-radius: 999px;
+  background: #ffef8b14; color: #ffef8b; font-size: 12px; font-weight: 600;
 }
-#controls select, #controls .math-input {
-  padding: 5px 9px; border: 1px solid #ffffff24; border-radius: 8px;
+.type-row label {
+  color: #e3f5fa; font-size: 10px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
+}
+select {
+  min-width: 0; padding: 4px 8px; border: 1px solid #ffffff24; border-radius: 8px;
   background: #082a45d9; color: #fff8e8;
 }
-#controls .math-input { font: 14px ui-monospace, "SF Mono", Menlo, monospace; }
-#controls select:hover, #controls .math-input:hover { border-color: #ffffff40; }
-#controls select:focus-visible, #controls .math-input:focus {
-  outline: none; border-color: #76b7ff; box-shadow: 0 0 0 3px #76b7ff33;
-}
-#controls .math-input[aria-invalid="true"] { border-color: #ff9eac; box-shadow: 0 0 0 3px #ff9eac26; }
-#controls [data-equation-type] .equation-row { font-size: 13px; font-weight: 600; color: #e3f5fa; }
-#fire { margin-bottom: 6px; padding: 3px 22px; font-size: 15px; letter-spacing: 0.03em; }
-#controls .symbol-row { gap: 6px; margin-top: 6px; }
-#controls .symbol-row button {
-  min-width: 34px; padding: 1px 10px; border: 1px solid #ffffff1f; border-radius: 999px;
-  background: #ffffff0d; font-size: 13px;
-}
-#controls .symbol-row button:hover { background: #76b7ff26; border-color: #76b7ff66; }
-#controls .force-row {
-  margin-top: 8px; padding: 4px 10px; border-radius: 10px;
-  background: #ffffff08; border: 1px solid #ffffff12; font-weight: 600;
-}
-#controls #force-value {
-  padding: 2px 8px; border-radius: 999px; background: #0004; color: #ffd77a;
-}
-#controls #equation-help, #controls .anchoring-help { margin-top: 5px; color: #d7e7f2; font-size: 11px; }
-#controls .syntax-help summary { margin-top: 4px; color: #ffd77a; font-weight: 600; }
-#controls .pov-toggle, #controls .result-view {
-  display: inline-flex; align-items: center; gap: 6px; margin: 6px 6px 0 0;
-  padding: 2px 10px; border-radius: 999px; background: #ffffff0a; border: 1px solid #ffffff14;
-  font-size: 12px; color: #dbe7f7;
-}
-#controls .pov-toggle input { accent-color: #76b7ff; margin: 0; }
-#controls .result-view select { padding: 1px 6px; border-radius: 6px; font-size: 12px; }
-/* Status line: a callout so the next instruction stands out. */
-#controls #status:not(:empty) {
-  margin-top: 6px; padding: 5px 10px; border-left: 3px solid #76b7ff;
-  border-radius: 0 8px 8px 0; background: #76b7ff14; color: #dbe7f7;
-}
-#controls #result:not([hidden]) {
-  padding: 7px 10px; border-radius: 8px; background: #ffef8b14; border: 1px solid #ffef8b55;
-}
-.turn-row { font-size: 13px; margin-bottom: 8px; }
-.symbol-row { display: flex; gap: 5px; margin-top: 6px; }
-.symbol-row button { padding: 2px 10px; font-size: 13px; }
-.force-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; }
-#force { flex: 1; min-width: 0; accent-color: #76b7ff; }
-#force-value { min-width: 3em; text-align: right; font-variant-numeric: tabular-nums; }
-#caster { color: #ffef8b; font-size: 12px; }
-.math-input {
-  flex: 1; min-width: 0; width: 0; padding: 5px;
-  background: #172438; color: #edf2f8; border: 1px solid #879bb7;
-  border-radius: 4px; font: 14px system-ui, sans-serif;
-}
-button {
-  flex-shrink: 0; border: 1px solid #879bb7; border-radius: 5px;
-  background: #25364d; color: white; padding: 8px 13px; cursor: pointer;
-}
-button:hover { background: #344e70; }
-button:disabled { opacity: 0.45; cursor: not-allowed; }
-button:focus-visible, input:focus-visible { outline: 2px solid #76b7ff; outline-offset: 2px; }
-p { margin: 6px 0 0; font-size: 12px; line-height: 1.35; }
-#equation-help, .examples, .syntax-help { color: #aebbd0; font-size: 11px; }
-#equation-error { color: #ff9eac; }
-#equation-error:empty { display: none; }
-.math-input[aria-invalid="true"] { border-color: #ff9eac; }
-.type-row { margin-bottom: 6px; }
+#equation-type { flex: 1; }
+[data-equation-type] .equation-row { font-size: 13px; font-weight: 600; color: #e3f5fa; }
 [data-equation-type] .equation-row + .equation-row { margin-top: 5px; }
 .parameter-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .parameter-fields .equation-row + .equation-row { margin-top: 0; }
-[data-equation-type] .equation-row { font-size: 12px; }
-select { min-width: 0; padding: 5px; background: #172438; color: #edf2f8; border: 1px solid #879bb7; border-radius: 4px; }
-#equation-type { flex: 1; }
-.bounds-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; font-size: 12px; }
+.bounds-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-size: 12px; }
 .bounds-row label { display: flex; flex: 1; align-items: center; gap: 5px; white-space: nowrap; }
-.bounds-row .math-input { width: 65px; padding: 5px; }
-.launch-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 6px; }
+.launch-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 12px; }
 #launch-point { flex: 1; min-width: 0; }
-#circle-options { align-items: center; font-size: 11px; }
-summary { cursor: pointer; }
-#result { margin-top: 7px; color: #ffef8b; }
+/* Plain text boxes (used only if the math boxes fail to load). */
+.math-input {
+  flex: 1; min-width: 0; width: 0; padding: 5px 9px; border: 1px solid #ffffff24; border-radius: 8px;
+  background: #082a45d9; color: #fff8e8; font: 14px ui-monospace, "SF Mono", Menlo, monospace;
+}
+.bounds-row .math-input { width: 65px; }
+/* Desmos-style math boxes (src/math-field.js): dark math on a light card. */
+math-field.math-field {
+  flex: 1; min-width: 0; padding: 2px 10px; font-size: 19px;
+  border: 2px solid #0e395a; border-radius: 9px; background: #fffaf0; color: #123b5d;
+  --caret-color: #1d6fd6; --selection-background-color: #76b7ff55;
+  --contains-highlight-background-color: #76b7ff1f; --primary-color: #1d6fd6;
+}
+math-field.math-field:focus-within { outline: none; border-color: #1d6fd6; box-shadow: 0 0 0 3px #76b7ff80; }
+math-field::part(virtual-keyboard-toggle), math-field::part(menu-toggle) { display: none; }
+.bounds-row math-field.math-field { width: 70px; font-size: 16px; }
+.math-input[aria-invalid="true"], .math-input[aria-invalid="true"] + math-field.math-field {
+  border-color: #ff7d8f; box-shadow: 0 0 0 3px #ff9eac40;
+}
+.symbol-row { display: flex; align-items: center; gap: 6px; }
+.symbol-row button { min-width: 34px; padding: 1px 10px; font-size: 13px; }
+#circle-options { font-size: 11px; }
+#equation-error { color: #ff9eac; }
+#equation-error:empty { display: none; }
+.examples, .syntax-help { color: #d7e7f2; font-size: 11px; }
+.examples:empty { display: none; }
+
+/* Right column. */
+.controls-side { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.controls-side > :not(.pov-toggle, .result-view) { flex-basis: 100%; }
+.controls-side p { margin: 0; }
+.force-row {
+  display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 10px; border-radius: 12px;
+  background: #ffffff08; border: 1px solid #ffffff12; font-size: 12px; font-weight: 600;
+}
+#force { flex: 1; min-width: 0; accent-color: #76b7ff; }
+#force-value {
+  min-width: 3em; padding: 2px 8px; border-radius: 999px; background: #0004;
+  color: #ffd77a; text-align: right; font-variant-numeric: tabular-nums;
+}
+#fire { margin-bottom: 6px; padding: 2px 22px; font-size: 15px; letter-spacing: 0.03em; }
+.syntax-help { order: 9; }
+.syntax-help summary { color: #ffd77a; font-weight: 600; cursor: pointer; }
+.syntax-help p { margin-top: 4px; }
+.pov-toggle, .controls-side .result-view {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 1px 10px;
+  border-radius: 999px; background: #ffffff0a; border: 1px solid #ffffff14; font-size: 12px; color: #dbe7f7;
+}
+.pov-toggle input { margin: 0; accent-color: #76b7ff; }
+.result-view select { padding: 1px 6px; border-radius: 6px; font-size: 12px; }
+/* Status line: a callout so the next instruction stands out. */
+#status:not(:empty) {
+  padding: 4px 10px; border-left: 3px solid #76b7ff;
+  border-radius: 0 8px 8px 0; background: #76b7ff14; color: #dbe7f7;
+}
+#status:empty { display: none; }
+#result { padding: 5px 10px; border-radius: 8px; background: #ffef8b14; border: 1px solid #ffef8b55; color: #ffef8b; }
 #finish-reason { margin-left: 8px; font-size: 12px; }
-[hidden] { display: none !important; }
+
+/* ---------- Narrow screens: stack the columns ---------- */
+@media (max-width: 860px) {
+  .panel { padding: 7px 9px; border-radius: 14px; }
+  #hud { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .teams { grid-column: 1 / -1; grid-row: 2; gap: 6px; }
+  .hud-side { flex-direction: row-reverse; align-items: center; }
+  .character-note { display: none; }
+  #controls { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+}
 @media (max-width: 480px) {
-  .panel { padding: 8px 10px; }
-  .title-row { flex-wrap: wrap; }
-  .teams { gap: 14px; }
-  h1 { font-size: 19px; }
-  .team-heading { gap: 5px; }
-  #hud, #controls { padding: 9px 10px; }
-  #hud .title-row { flex-wrap: nowrap; gap: 6px; }
-  #hud h1 { font-size: 16px; white-space: nowrap; }
-  #hud .mode-link, #restart { padding: 4px 9px; font-size: 11px; }
-  #hud .teams { gap: 6px; margin-top: 7px; }
-  #hud .team { padding: 6px 7px; }
-  #hud .team-heading strong { font-size: 12px; }
-  #hud .character-list { gap: 3px; }
-  .member { padding: 3px 4px 5px; }
+  #hud h1 { font-size: 16px; }
+  .hud-side { flex-direction: column; align-items: flex-end; gap: 6px; }
+  .round-clock strong { font-size: 16px; }
+  .team { padding: 5px 6px 6px; }
+  .team-heading { gap: 4px; }
+  .team-heading strong { font-size: 12px; }
+  .team-heading span { padding: 1px 5px; font-size: 9px; }
+  .character-list { gap: 3px; }
+  .member { flex-direction: column; gap: 0; padding: 2px 4px 4px; }
   .member b { font-size: 10px; }
   .member span { font-size: 9px; }
-  #controls .turn-row { font-size: 13px; margin-bottom: 4px; }
-  #controls .type-row label { font-size: 10px; letter-spacing: 0.03em; }
-  #fire { padding: 2px 14px; }
-  #controls .force-row { padding: 2px 8px; margin-top: 6px; }
-  #controls #equation-help, #controls .anchoring-help { margin-top: 3px; font-size: 10px; line-height: 1.3; }
-  #controls .pov-toggle, #controls .result-view { margin-top: 4px; padding: 1px 8px; font-size: 11px; }
-  #controls #status:not(:empty) { margin-top: 5px; padding: 4px 8px; font-size: 11px; }
+  .controls-main { grid-template-columns: minmax(0, 1fr); }
+  .turn-row { justify-content: space-between; }
+  .type-row label { letter-spacing: 0.04em; }
 }
 @media (max-height: 550px) and (min-width: 600px) {
-  .panel { padding: 6px 10px; }
+  .panel { padding: 5px 10px; }
   #hud { top: 6px; }
   #controls { bottom: 6px; }
-  .teams { margin-top: 4px; }
-  .character-list { white-space: normal; font-size: 10px; }
-  h1 { font-size: 16px; }
-  button { padding: 5px 10px; }
+  .character-note { display: none; }
   .examples { display: none; }
-  .turn-row { margin-bottom: 4px; }
-  #hud, #controls { padding: 6px 10px; }
-  #hud .teams { margin-top: 5px; }
-  #hud .team { padding: 4px 8px; }
-  #hud progress { margin: 4px 0; }
-  .member { flex-direction: row; justify-content: space-between; padding: 2px 5px 4px; }
-  #controls .force-row { padding: 2px 10px; margin-top: 6px; }
-  #controls .pov-toggle, #controls .result-view { margin-top: 4px; padding: 1px 8px; }
 }
 
 
@@ -259,12 +253,3 @@ summary { cursor: pointer; }
 .shooter-coordinate { color: #ffef8b; }
 .enemy-coordinate { color: #ffd3d9; }
 .anchoring-help { color: #d1e6ff; font-size: 11px; }
-.pov-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  color: #dbe7f7;
-}
-.character-note { margin: 0.25rem 0 0.6rem; font-size: 0.82rem; color: #d4e2f2; }
-.character-note a { color: #9bd5ff; font-weight: 700; }
